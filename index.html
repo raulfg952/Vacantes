@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de ofertas de empleo</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --border: #e3e1da;
+    --text-primary: #1c1c1a;
+    --text-secondary: #6b6a64;
+    --text-tertiary: #9a9890;
+    --accent: #185fa5;
+    --accent-light: #e6f1fb;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    padding: 2rem;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header { margin-bottom: 1.5rem; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  .subtitle { font-size: 14px; color: var(--text-secondary); margin: 0; }
+  #status { font-size: 13px; color: var(--text-secondary); margin: 0 0 1.5rem; display: flex; align-items: center; gap: 8px; }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .kpi { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+  .kpi-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }
+  .kpi-value { font-size: 26px; font-weight: 500; margin: 0; }
+
+  .filters { display: flex; gap: 10px; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center; }
+  select, input[type="text"] {
+    height: 36px; padding: 0 12px; border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); font-size: 14px; color: var(--text-primary); min-width: 160px;
+  }
+  select:hover, input:hover { border-color: #c9c7be; }
+  select:focus, input:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); border-color: var(--accent); }
+  .clear-btn {
+    height: 36px; padding: 0 14px; border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface); font-size: 13px; color: var(--text-secondary); cursor: pointer;
+  }
+  .clear-btn:hover { background: #f1efe8; }
+
+  .charts { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-bottom: 1.5rem; }
+  .chart-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .chart-title { font-size: 14px; font-weight: 500; margin: 0 0 12px; }
+
+  .table-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .table-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border); }
+  .table-header .chart-title { margin: 0; }
+  .table-count { font-size: 13px; color: var(--text-tertiary); }
+  .table-wrap { overflow: auto; max-height: 420px; }
+  table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 16px; font-weight: 500; color: var(--text-secondary); background: var(--surface); position: sticky; top: 0; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 16px; border-bottom: 0.5px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+  a.row-link { color: var(--accent); text-decoration: none; }
+  a.row-link:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 12px; background: var(--accent-light); color: #0c447c; }
+  .empty-state { padding: 2.5rem; text-align: center; color: var(--text-tertiary); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Dashboard de ofertas de empleo</h1>
+    <p class="subtitle">Datos procesados desde Trabajos.com — todo se ejecuta en tu navegador, sin servidor</p>
+  </header>
+
+  <p id="status"><span class="spinner"></span> Inicializando DuckDB-WASM...</p>
+
+  <div class="kpis">
+    <div class="kpi"><p class="kpi-label">Total ofertas</p><p class="kpi-value" id="kpi-total">-</p></div>
+    <div class="kpi"><p class="kpi-label">Empresas</p><p class="kpi-value" id="kpi-empresas">-</p></div>
+    <div class="kpi"><p class="kpi-label">Comunidades</p><p class="kpi-value" id="kpi-comunidades">-</p></div>
+    <div class="kpi"><p class="kpi-label">Salario medio</p><p class="kpi-value" id="kpi-salario">-</p></div>
+  </div>
+
+  <div class="filters">
+    <select id="f-comunidad"><option value="">Todas las comunidades</option></select>
+    <select id="f-categoria"><option value="">Todas las categorías</option></select>
+    <select id="f-contrato"><option value="">Todos los contratos</option></select>
+    <select id="f-jornada"><option value="">Toda jornada</option></select>
+    <input type="text" id="f-busqueda" placeholder="Buscar por título o empresa...">
+    <button class="clear-btn" id="clear-filters">Limpiar filtros</button>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <p class="chart-title">Ofertas por comunidad autónoma</p>
+      <div style="position:relative; height:260px;">
+        <canvas id="chartComunidad" role="img" aria-label="Gráfico de barras de ofertas por comunidad autónoma"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-title">Por categoría</p>
+      <div style="position:relative; height:260px;">
+        <canvas id="chartCategoria" role="img" aria-label="Gráfico de barras horizontal de ofertas por categoría"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <p class="chart-title">Detalle de ofertas</p>
+      <span class="table-count" id="table-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Título</th><th>Empresa</th><th>Categoría</th><th>Comunidad</th>
+          <th>Contrato</th><th>Jornada</th><th>Fecha</th><th>Salario</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script type="module">
+import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+
+const statusEl = document.getElementById('status');
+let conn, chartComunidad, chartCategoria;
+
+async function init() {
+  try {
+    const bundles = duckdb.getJsDelivrBundles();
+    const bundle = await duckdb.selectBundle(bundles);
+    const worker = await duckdb.createWorker(bundle.mainWorker);
+    const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+    const db = new duckdb.AsyncDuckDB(logger, worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+
+    statusEl.innerHTML = '<span class="spinner"></span> Descargando y leyendo ofertas.parquet...';
+
+    await db.registerFileURL('ofertas.parquet', new URL('ofertas.parquet', window.location.href).href, duckdb.DuckDBDataProtocol.HTTP, false);
+    conn = await db.connect();
+    await conn.query(`CREATE TABLE ofertas AS SELECT * FROM read_parquet('ofertas.parquet')`);
+
+    statusEl.style.display = 'none';
+
+    await poblarFiltros();
+    document.querySelectorAll('.filters select, .filters input').forEach(el => {
+      el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', refresh);
+    });
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      document.querySelectorAll('.filters select').forEach(s => s.value = '');
+      document.getElementById('f-busqueda').value = '';
+      refresh();
+    });
+
+    await refresh();
+  } catch (err) {
+    statusEl.innerHTML = 'Error al cargar: ' + err.message;
+    console.error(err);
+  }
+}
+
+async function poblarFiltros() {
+  const comunidades = await conn.query(`SELECT DISTINCT comunidad FROM ofertas WHERE comunidad IS NOT NULL ORDER BY comunidad`);
+  const categorias = await conn.query(`SELECT DISTINCT categoria FROM ofertas WHERE categoria IS NOT NULL ORDER BY categoria`);
+  const contratos = await conn.query(`SELECT DISTINCT tipo_contrato FROM ofertas WHERE tipo_contrato IS NOT NULL ORDER BY tipo_contrato`);
+  const jornadas = await conn.query(`SELECT DISTINCT jornada FROM ofertas WHERE jornada IS NOT NULL ORDER BY jornada`);
+
+  const fComunidad = document.getElementById('f-comunidad');
+  comunidades.toArray().forEach(r => fComunidad.innerHTML += `<option value="${r.comunidad}">${r.comunidad}</option>`);
+
+  const fCategoria = document.getElementById('f-categoria');
+  categorias.toArray().forEach(r => fCategoria.innerHTML += `<option value="${r.categoria}">${r.categoria}</option>`);
+
+  const fContrato = document.getElementById('f-contrato');
+  contratos.toArray().forEach(r => fContrato.innerHTML += `<option value="${r.tipo_contrato}">${r.tipo_contrato}</option>`);
+
+  const fJornada = document.getElementById('f-jornada');
+  jornadas.toArray().forEach(r => fJornada.innerHTML += `<option value="${r.jornada}">${r.jornada}</option>`);
+}
+
+function buildWhere() {
+  const where = [];
+  const comunidad = document.getElementById('f-comunidad').value;
+  const categoria = document.getElementById('f-categoria').value;
+  const contrato = document.getElementById('f-contrato').value;
+  const jornada = document.getElementById('f-jornada').value;
+  const busqueda = document.getElementById('f-busqueda').value.trim().replace(/'/g, "''");
+
+  if (comunidad) where.push(`comunidad = '${comunidad.replace(/'/g, "''")}'`);
+  if (categoria) where.push(`categoria = '${categoria.replace(/'/g, "''")}'`);
+  if (contrato) where.push(`tipo_contrato = '${contrato.replace(/'/g, "''")}'`);
+  if (jornada) where.push(`jornada = '${jornada.replace(/'/g, "''")}'`);
+  if (busqueda) where.push(`(lower(titulo) LIKE lower('%${busqueda}%') OR lower(empresa) LIKE lower('%${busqueda}%'))`);
+
+  return where.length ? 'WHERE ' + where.join(' AND ') : '';
+}
+
+async function refresh() {
+  const whereClause = buildWhere();
+
+  const kpis = await conn.query(`
+    SELECT count(*) as total, count(distinct empresa) as empresas,
+           count(distinct comunidad) as comunidades, avg((salario_min + salario_max) / 2.0) as salario_medio
+    FROM ofertas ${whereClause}
+  `);
+  const k = kpis.toArray()[0];
+  document.getElementById('kpi-total').textContent = Number(k.total).toLocaleString('es-ES');
+  document.getElementById('kpi-empresas').textContent = Number(k.empresas).toLocaleString('es-ES');
+  document.getElementById('kpi-comunidades').textContent = Number(k.comunidades);
+  document.getElementById('kpi-salario').textContent = k.salario_medio
+    ? '€' + Math.round(Number(k.salario_medio)).toLocaleString('es-ES')
+    : 'n/d';
+
+  const porComunidad = await conn.query(`
+    SELECT comunidad, count(*) as n FROM ofertas ${whereClause}
+    GROUP BY comunidad ORDER BY n DESC LIMIT 12
+  `);
+  const cRows = porComunidad.toArray();
+  const ctxC = document.getElementById('chartComunidad');
+  if (chartComunidad) chartComunidad.destroy();
+  chartComunidad = new Chart(ctxC, {
+    type: 'bar',
+    data: { labels: cRows.map(r => r.comunidad), datasets: [{ data: cRows.map(r => Number(r.n)), backgroundColor: '#378ADD', borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true } }
+    }
+  });
+
+  const porCategoria = await conn.query(`
+    SELECT categoria, count(*) as n FROM ofertas ${whereClause}
+    GROUP BY categoria ORDER BY n DESC LIMIT 10
+  `);
+  const catRows = porCategoria.toArray().reverse();
+  const ctxCat = document.getElementById('chartCategoria');
+  if (chartCategoria) chartCategoria.destroy();
+  chartCategoria = new Chart(ctxCat, {
+    type: 'bar',
+    data: { labels: catRows.map(r => r.categoria), datasets: [{ data: catRows.map(r => Number(r.n)), backgroundColor: '#1D9E75', borderRadius: 4 }] },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }
+    }
+  });
+
+  const detalle = await conn.query(`
+    SELECT titulo, empresa, categoria, comunidad, tipo_contrato, jornada, fecha, salario_min, salario_max, url
+    FROM ofertas ${whereClause} ORDER BY fecha DESC LIMIT 100
+  `);
+  const rows = detalle.toArray();
+  document.getElementById('table-count').textContent = `Mostrando ${rows.length} de ${Number(k.total).toLocaleString('es-ES')}`;
+
+  const tbody = document.getElementById('tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay ofertas que coincidan con estos filtros</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(r => {
+      const salario = (r.salario_min || r.salario_max)
+        ? '€' + Math.round(Number(r.salario_min || r.salario_max)).toLocaleString('es-ES') + (r.salario_max && r.salario_max !== r.salario_min ? ' - €' + Math.round(Number(r.salario_max)).toLocaleString('es-ES') : '')
+        : '<span style="color:var(--text-tertiary)">n/d</span>';
+      return `<tr>
+        <td><a class="row-link" href="${r.url}" target="_blank" rel="noopener">${r.titulo}</a></td>
+        <td>${r.empresa}</td>
+        <td><span class="badge">${r.categoria}</span></td>
+        <td>${r.comunidad || 'n/d'}</td>
+        <td>${r.tipo_contrato || 'n/d'}</td>
+        <td>${r.jornada || 'n/d'}</td>
+        <td>${r.fecha || 'n/d'}</td>
+        <td>${salario}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
