@@ -68,6 +68,17 @@
   .chart-title { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
   .chart-subtitle { font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px; }
 
+  /* --- Toggle del mapa (Comunidades / Provincias) --- */
+  .map-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .map-toggle { display: inline-flex; border: 0.5px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .map-toggle button {
+    height: 30px; padding: 0 14px; border: none; background: var(--surface);
+    font-size: 13px; color: var(--text-secondary); cursor: pointer;
+  }
+  .map-toggle button + button { border-left: 0.5px solid var(--border); }
+  .map-toggle button.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+  .map-note { font-size: 12px; color: var(--text-tertiary); margin: 8px 0 0; }
+
   .table-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
   .table-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border); }
   .table-header .chart-title { margin: 0; }
@@ -175,6 +186,23 @@
     </div>
   </div>
 
+  <div class="chart-card" style="margin-bottom: 20px;">
+    <div class="map-header">
+      <div>
+        <p class="chart-title">Mapa de ofertas</p>
+        <p class="chart-subtitle">Número de ofertas por región — pasa el ratón por el mapa para ver el detalle</p>
+      </div>
+      <div class="map-toggle" role="group" aria-label="Nivel del mapa">
+        <button id="mapa-comunidad" class="active">Comunidades</button>
+        <button id="mapa-provincia">Provincias</button>
+      </div>
+    </div>
+    <div style="position:relative; height:440px;">
+      <canvas id="chartMapa" role="img" aria-label="Mapa de España coloreado por número de ofertas por región"></canvas>
+    </div>
+    <p class="map-note" id="mapa-nota" hidden></p>
+  </div>
+
   <div class="chart-card" style="margin-bottom: 1.5rem;">
     <p class="chart-title">Evolución temporal</p>
     <p class="chart-subtitle">Ofertas publicadas por semana, últimas 12 semanas con datos</p>
@@ -205,11 +233,147 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.3.1/build/index.umd.min.js"></script>
 <script type="module">
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
+// Registro manual de los componentes del mapa (el bundle UMD de
+// chartjs-chart-geo no se auto-registra en Chart.js 4).
+Chart.register(ChartGeo.ChoroplethController, ChartGeo.ProjectionScale, ChartGeo.ColorScale, ChartGeo.GeoFeature);
+
 const statusEl = document.getElementById('status');
 let conn, chartComunidad, chartCategoria, chartExperiencia, chartPortal, chartTendencia;
+let chartMapa;
+let nivelMapa = 'comunidad';               // 'comunidad' | 'provincia'
+const geoNiveles = { comunidad: null, provincia: null };  // features + índice de nombres por nivel
+
+// =========================================================================
+// MAPA: carga del atlas y emparejado de nombres
+// =========================================================================
+// El atlas (es-atlas, derivado de datos oficiales del IGN) usa los nombres
+// oficiales, a veces bilingües ("Alacant/Alicante", "Cataluña/Catalunya"),
+// mientras que el parquet trae los del nomenclátor del INE. Para casarlos se
+// normalizan ambos lados: forma "Coruña, A" -> "A Coruña", sin tildes, sin
+// palabras de relleno (comunidad, illes...), y unos pocos alias para nombres
+// con denominación distinta en castellano (Gerona -> Girona, etc.).
+
+const ALIAS_REGION = {
+  'baleares': 'balears', 'gerona': 'girona', 'lerida': 'lleida',
+  'orense': 'ourense', 'guipuzcoa': 'gipuzkoa', 'vizcaya': 'bizkaia',
+  'alava': 'araba', 'nafarroa': 'navarra', 'castellon plana': 'castello',
+};
+
+function normRegion(s) {
+  s = String(s ?? '').trim();
+  if (s.includes(',')) {                    // "Coruña, A" -> "A Coruña"
+    const [a, b] = s.split(',');
+    s = `${b} ${a}`;
+  }
+  s = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  s = s.replace(/[^a-z0-9]+/g, ' ').trim();
+  const relleno = new Set(['a', 'de', 'del', 'la', 'las', 'el', 'los', 'comunidad',
+    'comunitat', 'foral', 'principado', 'region', 'ciudad', 'autonoma', 'illes', 'islas']);
+  s = s.split(' ').filter(w => w && !relleno.has(w)).join(' ');
+  return ALIAS_REGION[s] || s;
+}
+
+// Claves candidatas de un nombre: el nombre entero y cada parte si es
+// bilingüe con "/" ("Alacant/Alicante" -> alacant, alicante y "alacant alicante").
+function clavesRegion(nombre) {
+  const claves = new Set([normRegion(nombre)]);
+  String(nombre ?? '').split('/').forEach(p => claves.add(normRegion(p)));
+  claves.delete('');
+  return claves;
+}
+
+async function cargarAtlas() {
+  const urls = {
+    comunidad: 'https://cdn.jsdelivr.net/npm/es-atlas@0.6.0/es/autonomous_regions.json',
+    provincia: 'https://cdn.jsdelivr.net/npm/es-atlas@0.6.0/es/provinces.json',
+  };
+  const objetos = { comunidad: 'autonomous_regions', provincia: 'provinces' };
+
+  for (const nivel of ['comunidad', 'provincia']) {
+    const topo = await (await fetch(urls[nivel])).json();
+    const features = ChartGeo.topojson
+      .feature(topo, topo.objects[objetos[nivel]]).features
+      .filter(f => !/gibraltar/i.test(f.properties.name)); // no es región española
+
+    // Índice: clave normalizada -> feature, para casar con los datos
+    const indice = new Map();
+    features.forEach(f => clavesRegion(f.properties.name).forEach(c => indice.set(c, f)));
+    geoNiveles[nivel] = { features, indice };
+  }
+}
+
+async function refreshMapa() {
+  const geo = geoNiveles[nivelMapa];
+  if (!geo) return;   // el atlas aún no ha cargado (o falló); se omite
+
+  const whereClause = buildWhere();
+  const res = await conn.query(`
+    SELECT ${nivelMapa} AS region, count(*) AS n FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} ${nivelMapa} IS NOT NULL GROUP BY region
+  `);
+
+  // Casar cada región de los datos con su feature del mapa
+  const valores = new Map();      // nombre del feature -> nº de ofertas
+  const sinCasar = [];
+  res.toArray().forEach(r => {
+    let feature = null;
+    for (const clave of clavesRegion(r.region)) {
+      if (geo.indice.has(clave)) { feature = geo.indice.get(clave); break; }
+    }
+    if (feature) {
+      const nombre = feature.properties.name;
+      valores.set(nombre, (valores.get(nombre) || 0) + Number(r.n));
+    } else {
+      sinCasar.push(`${r.region} (${r.n})`);
+    }
+  });
+
+  const nota = document.getElementById('mapa-nota');
+  if (sinCasar.length) {
+    console.warn('Regiones de los datos sin correspondencia en el mapa:', sinCasar);
+    nota.textContent = `Regiones sin ubicar en el mapa: ${sinCasar.join(', ')}`;
+    nota.hidden = false;
+  } else {
+    nota.hidden = true;
+  }
+
+  if (chartMapa) chartMapa.destroy();
+  chartMapa = new Chart(document.getElementById('chartMapa'), {
+    type: 'choropleth',
+    data: {
+      labels: geo.features.map(f => f.properties.name),
+      datasets: [{
+        data: geo.features.map(f => ({ feature: f, value: valores.get(f.properties.name) || 0 })),
+        borderColor: '#ffffff',
+        borderWidth: 0.5,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${Number(ctx.raw.value).toLocaleString('es-ES')} ofertas`,
+          },
+        },
+      },
+      scales: {
+        projection: { axis: 'x', projection: 'mercator' },
+        color: {
+          axis: 'x',
+          interpolate: 'blues',
+          missing: '#f1efe8',
+          legend: { position: 'bottom-right', align: 'bottom' },
+        },
+      },
+    },
+  });
+}
 
 // Escapa entidades HTML antes de interpolar texto que viene de datos
 // scrapeados (no controlados por nosotros) en innerHTML, para evitar que un
@@ -274,6 +438,27 @@ async function init() {
     `);
 
     statusEl.style.display = 'none';
+
+    // El atlas del mapa se carga aparte: si fallara (CDN caído, sin red),
+    // el resto del dashboard sigue funcionando y solo se queda sin mapa.
+    try {
+      await cargarAtlas();
+    } catch (err) {
+      console.error('No se pudo cargar el atlas del mapa:', err);
+      const nota = document.getElementById('mapa-nota');
+      nota.textContent = 'No se pudo cargar el mapa (error descargando el atlas de España).';
+      nota.hidden = false;
+    }
+
+    // Toggle Comunidades / Provincias del mapa
+    for (const nivel of ['comunidad', 'provincia']) {
+      document.getElementById(`mapa-${nivel}`).addEventListener('click', async () => {
+        nivelMapa = nivel;
+        document.getElementById('mapa-comunidad').classList.toggle('active', nivel === 'comunidad');
+        document.getElementById('mapa-provincia').classList.toggle('active', nivel === 'provincia');
+        await refreshMapa();
+      });
+    }
 
     await poblarFiltros();
     document.querySelectorAll('.filters select').forEach(el => el.addEventListener('change', refresh));
@@ -434,6 +619,9 @@ async function refresh() {
       scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }
     }
   });
+
+  // --- Mapa de España (responde a los mismos filtros) ---
+  await refreshMapa();
 
   // --- Evolucion temporal: ofertas por semana, ultimas 12 semanas con datos ---
   // "fecha" es texto DD/MM/YYYY (published_time.py normaliza a ese formato),
