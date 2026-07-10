@@ -44,7 +44,7 @@
   details.about ul { margin: 6px 0 0; padding-left: 20px; }
   details.about code { background: #f1efe8; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
 
-  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem; }
   .kpi { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
   .kpi-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 4px; }
   .kpi-value { font-size: 24px; font-weight: 500; margin: 0; }
@@ -108,7 +108,7 @@
 <div class="container">
   <header>
     <h1>Dashboard de ofertas de empleo</h1>
-    <p class="subtitle">Ofertas armonizadas desde más de 20 portales de empleo españoles — todo se ejecuta en tu navegador, sin servidor</p>
+    <p class="subtitle">Ofertas armonizadas desde más de 20 portales de empleo españoles</p>
   </header>
 
   <details class="about">
@@ -123,6 +123,8 @@
         <li><b>Salario</b>: se normaliza a un importe anual bruto en euros a partir de rangos, distintos periodos (hora/mes/año) y separadores de miles ambiguos.</li>
         <li><b>Experiencia exigida</b>: se agrupa en 4 categorías (No se requiere / Más de 6 meses / Más de 2 años / Más de 5 años) a partir de texto libre muy variado entre portales.</li>
         <li><b>Tipo de contrato</b>: se reduce a 6 categorías (Indefinido, Temporal, Fijo discontinuo, Autónomo, Prácticas/Formación, Otro) mediante un diccionario editable.</li>
+        <li><b>Tipo de jornada</b>: se clasifica en Completa / Parcial mediante un diccionario editable, con apoyo en las horas semanales cuando el texto solo trae horarios.</li>
+        <li><b>Estudios requeridos</b>: se mapea a los niveles educativos de la CNED-2014 (INE), de "Sin estudios" a "Doctorado", conservando la titulación mínima cuando la oferta lista varias.</li>
       </ul>
       Este dashboard se sirve como una página estática en GitHub Pages: el fichero <code>ofertas.parquet</code>
       se descarga una sola vez y todas las consultas (filtros, agregados, gráficas) se ejecutan en el
@@ -134,7 +136,6 @@
 
   <div class="kpis">
     <div class="kpi"><p class="kpi-label">Total ofertas</p><p class="kpi-value" id="kpi-total">-</p></div>
-    <div class="kpi"><p class="kpi-label">Vacantes totales</p><p class="kpi-value" id="kpi-vacantes">-</p></div>
     <div class="kpi"><p class="kpi-label">Empresas</p><p class="kpi-value" id="kpi-empresas">-</p></div>
     <div class="kpi"><p class="kpi-label">Portales</p><p class="kpi-value" id="kpi-portales">-</p></div>
     <div class="kpi"><p class="kpi-label">Salario medio</p><p class="kpi-value" id="kpi-salario">-</p></div>
@@ -143,54 +144,20 @@
   <div class="filters">
     <select id="f-comunidad"><option value="">Todas las comunidades</option></select>
     <select id="f-provincia"><option value="">Todas las provincias</option></select>
-    <select id="f-categoria"><option value="">Todas las categorías</option></select>
     <select id="f-contrato"><option value="">Todos los contratos</option></select>
     <select id="f-jornada"><option value="">Toda jornada</option></select>
     <select id="f-experiencia"><option value="">Toda experiencia</option></select>
     <select id="f-portal"><option value="">Todos los portales</option></select>
+    <select id="f-salario"><option value="">Cualquier salario</option></select>
     <input type="text" id="f-busqueda" placeholder="Buscar por título o empresa...">
     <button class="clear-btn" id="clear-filters">Limpiar filtros</button>
-  </div>
-
-  <div class="charts">
-    <div class="chart-card">
-      <p class="chart-title">Ofertas por comunidad autónoma</p>
-      <p class="chart-subtitle">Top 12</p>
-      <div style="position:relative; height:260px;">
-        <canvas id="chartComunidad" role="img" aria-label="Gráfico de barras de ofertas por comunidad autónoma"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <p class="chart-title">Por categoría</p>
-      <p class="chart-subtitle">Top 10</p>
-      <div style="position:relative; height:260px;">
-        <canvas id="chartCategoria" role="img" aria-label="Gráfico de barras horizontal de ofertas por categoría"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <div class="charts-secondary">
-    <div class="chart-card">
-      <p class="chart-title">Experiencia exigida</p>
-      <p class="chart-subtitle">De menos a más experiencia requerida</p>
-      <div style="position:relative; height:200px;">
-        <canvas id="chartExperiencia" role="img" aria-label="Gráfico de barras de ofertas por nivel de experiencia exigido"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <p class="chart-title">Ofertas por portal de origen</p>
-      <p class="chart-subtitle">Top 10 de más de 20 portales agregados</p>
-      <div style="position:relative; height:200px;">
-        <canvas id="chartPortal" role="img" aria-label="Gráfico de barras horizontal de ofertas por portal de origen"></canvas>
-      </div>
-    </div>
   </div>
 
   <div class="chart-card" style="margin-bottom: 20px;">
     <div class="map-header">
       <div>
         <p class="chart-title">Mapa de ofertas</p>
-        <p class="chart-subtitle">Número de ofertas por región — pasa el ratón por el mapa para ver el detalle</p>
+        <p class="chart-subtitle">Número de ofertas por región — pasa el ratón para ver el detalle</p>
       </div>
       <div class="map-toggle" role="group" aria-label="Nivel del mapa">
         <button id="mapa-comunidad" class="active">Comunidades</button>
@@ -201,6 +168,65 @@
       <canvas id="chartMapa" role="img" aria-label="Mapa de España coloreado por número de ofertas por región"></canvas>
     </div>
     <p class="map-note" id="mapa-nota" hidden></p>
+  </div>
+
+  <div class="charts-secondary">
+    <div class="chart-card">
+      <p class="chart-title">Por tipo de contrato</p>
+      <p class="chart-subtitle">Ofertas con contrato informado</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartContrato" role="img" aria-label="Gráfico de barras horizontal de ofertas por tipo de contrato"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-title">Por tipo de jornada</p>
+      <p class="chart-subtitle">Ofertas con jornada informada</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartJornada" role="img" aria-label="Gráfico de barras de ofertas por tipo de jornada"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-secondary">
+    <div class="chart-card">
+      <p class="chart-title">Por estudios requeridos</p>
+      <p class="chart-subtitle">De menor a mayor nivel formativo (CNED)</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartEstudios" role="img" aria-label="Gráfico de barras horizontal de ofertas por estudios requeridos"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-title">Experiencia exigida</p>
+      <p class="chart-subtitle">De menos a más experiencia requerida</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartExperiencia" role="img" aria-label="Gráfico de barras de ofertas por nivel de experiencia exigido"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <p class="chart-title">Distribución salarial</p>
+      <p class="chart-subtitle">Ofertas con salario informado, en tramos de 5.000 € brutos anuales (el último tramo agrupa 90.000 € o más)</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartSalario" role="img" aria-label="Histograma de la distribución salarial de las ofertas en tramos de cinco mil euros"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-title">Ofertas por portal de origen</p>
+      <p class="chart-subtitle">Top 10 de más de 20 portales agregados</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartPortal" role="img" aria-label="Gráfico de barras horizontal de ofertas por portal de origen"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom: 20px;">
+      <p class="chart-title">Salario medio por comunidad autónoma</p>
+      <p class="chart-subtitle">Ofertas con salario informado, ordenado de mayor a menor</p>
+      <div style="position:relative; height:220px;">
+        <canvas id="chartSalarioComunidad" role="img" aria-label="Gráfico de barras del salario medio por comunidad autónoma"></canvas>
+      </div>
   </div>
 
   <div class="chart-card" style="margin-bottom: 1.5rem;">
@@ -234,6 +260,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.3.1/build/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script type="module">
 import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
 
@@ -242,7 +269,7 @@ import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0
 Chart.register(ChartGeo.ChoroplethController, ChartGeo.ProjectionScale, ChartGeo.ColorScale, ChartGeo.GeoFeature);
 
 const statusEl = document.getElementById('status');
-let conn, chartComunidad, chartCategoria, chartExperiencia, chartPortal, chartTendencia;
+let conn, chartContrato, chartJornada, chartEstudios, chartExperiencia, chartPortal, chartSalario, chartSalarioComunidad, chartTendencia;
 let chartMapa;
 let nivelMapa = 'comunidad';               // 'comunidad' | 'provincia'
 const geoNiveles = { comunidad: null, provincia: null };  // features + índice de nombres por nivel
@@ -286,6 +313,26 @@ function clavesRegion(nombre) {
   return claves;
 }
 
+// Canarias está a más de 1.000 km de la península: si se dibuja en su sitio
+// real, la proyección tiene que abarcar ambas y la península queda pequeña y
+// esquinada. Como en los mapas oficiales, se recoloca el archipiélago en un
+// recuadro imaginario al sureste de la península desplazando sus coordenadas.
+const DESPLAZAMIENTO_CANARIAS = [8.8, 6.3];   // [longitud, latitud] en grados
+const REGIONES_CANARIAS = new Set(['canarias', 'palmas', 'santa cruz tenerife']);
+
+function desplazarCoords(coords, [dLon, dLat]) {
+  if (typeof coords[0] === 'number') return [coords[0] + dLon, coords[1] + dLat];
+  return coords.map(c => desplazarCoords(c, [dLon, dLat]));
+}
+
+function recolocarCanarias(features) {
+  features.forEach(f => {
+    if (REGIONES_CANARIAS.has(normRegion(f.properties.name))) {
+      f.geometry.coordinates = desplazarCoords(f.geometry.coordinates, DESPLAZAMIENTO_CANARIAS);
+    }
+  });
+}
+
 async function cargarAtlas() {
   const urls = {
     comunidad: 'https://cdn.jsdelivr.net/npm/es-atlas@0.6.0/es/autonomous_regions.json',
@@ -298,6 +345,7 @@ async function cargarAtlas() {
     const features = ChartGeo.topojson
       .feature(topo, topo.objects[objetos[nivel]]).features
       .filter(f => !/gibraltar/i.test(f.properties.name)); // no es región española
+    recolocarCanarias(features);
 
     // Índice: clave normalizada -> feature, para casar con los datos
     const indice = new Map();
@@ -341,13 +389,21 @@ async function refreshMapa() {
     nota.hidden = true;
   }
 
+  // Total de ofertas ubicadas en el mapa: es la base del porcentaje que
+  // muestra el tooltip (los porcentajes de todas las regiones suman 100).
+  const totalMapa = [...valores.values()].reduce((suma, v) => suma + v, 0);
+
   if (chartMapa) chartMapa.destroy();
   chartMapa = new Chart(document.getElementById('chartMapa'), {
     type: 'choropleth',
     data: {
       labels: geo.features.map(f => f.properties.name),
       datasets: [{
-        data: geo.features.map(f => ({ feature: f, value: valores.get(f.properties.name) || 0 })),
+        outline: geo.features,   // ajusta la proyección a España (sin esto encuadra el mundo entero y el mapa sale diminuto)
+        showOutline: false,
+        // Las regiones sin ofertas llevan value null (no 0): así el plugin las
+        // pinta con el color "missing" (gris) en vez del extremo de la rampa.
+        data: geo.features.map(f => ({ feature: f, value: valores.get(f.properties.name) ?? null })),
         borderColor: '#ffffff',
         borderWidth: 0.5,
       }],
@@ -358,7 +414,13 @@ async function refreshMapa() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${Number(ctx.raw.value).toLocaleString('es-ES')} ofertas`,
+            title: items => items[0]?.raw?.feature?.properties?.name ?? '',
+            label: ctx => {
+              if (ctx.raw.value == null) return ' Sin ofertas';
+              const n = Number(ctx.raw.value);
+              const pct = totalMapa ? (n / totalMapa * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 }) : '0';
+              return ` ${n.toLocaleString('es-ES')} ofertas (${pct}%)`;
+            },
           },
         },
       },
@@ -366,8 +428,8 @@ async function refreshMapa() {
         projection: { axis: 'x', projection: 'mercator' },
         color: {
           axis: 'x',
-          interpolate: 'blues',
-          missing: '#f1efe8',
+          interpolate: rampaMapa,
+          missing: '#E7E5DC',
           legend: { position: 'bottom-right', align: 'bottom' },
         },
       },
@@ -399,7 +461,79 @@ function debounce(fn, ms) {
 // experiencia exigida), y una rampa secuencial de un solo tono para reflejar
 // ese orden — no colores categóricos sin relación entre sí.
 const ORDEN_EXPERIENCIA = ['No se requiere', 'Más de 6 meses', 'Más de 2 años', 'Más de 5 años'];
-const RAMPA_EXPERIENCIA = ['#BFDBFE', '#60A5FA', '#2563EB', '#1E3A8A'];
+
+// Los estudios requeridos vienen ya armonizados por el pipeline a los niveles
+// de la CNED-2014 (nomenclatura corta del INE, con el nivel 0 renombrado a
+// "Sin estudios"). Son exactamente estos, de menor a mayor nivel formativo;
+// cualquier valor fuera de la lista (no debería haberlos) va al final.
+const ORDEN_ESTUDIOS = [
+  'Sin estudios',
+  'Estudios primarios',
+  'Primera etapa de secundaria',
+  'Segunda etapa de secundaria',
+  'Educación superior FP',
+  'Grado y diplomatura',
+  'Máster y licenciatura',
+  'Doctorado',
+];
+
+function rankEstudios(texto) {
+  const i = ORDEN_ESTUDIOS.indexOf(String(texto ?? '').trim());
+  return i === -1 ? ORDEN_ESTUDIOS.length : i;   // desconocidos al final
+}
+
+// Etiquetas de porcentaje impresas sobre las barras (plugin datalabels).
+// El plugin NO se registra globalmente a propósito: solo se activa en las
+// gráficas que lo piden con plugins: [ChartDataLabels], para no ensuciar el
+// mapa ni las gráficas donde el porcentaje no aplica.
+function etiquetasPorcentaje(valores, total = null) {
+  const base = total ?? valores.reduce((suma, v) => suma + v, 0);
+  return {
+    anchor: 'end',      // al final de la barra...
+    align: 'end',       // ...y por fuera de ella
+    clamp: true,
+    color: '#57534E',
+    font: { size: 10, weight: '500' },
+    formatter: v => base ? (Number(v) / base * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + '%' : '',
+  };
+}
+
+// Tooltip de barras con valor absoluto y porcentaje. El porcentaje se calcula
+// sobre 'total' si se pasa (p. ej. el total de ofertas filtradas, para el top
+// 10 de portales que no muestra todas las barras); si no, sobre la suma de
+// las barras visibles.
+function tooltipConPorcentaje(valores, total = null) {
+  const base = total ?? valores.reduce((suma, v) => suma + v, 0);
+  return {
+    callbacks: {
+      label: ctx => {
+        const v = Number(ctx.raw);
+        const pct = base ? (v / base * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 }) : '0';
+        return ` ${v.toLocaleString('es-ES')} ofertas (${pct}%)`;
+      },
+    },
+  };
+}
+
+// --- Rampa de color del mapa -------------------------------------------------
+// Dos decisiones deliberadas:
+// 1. Va de amarillo a rojo oscuro (en vez de azules) y arranca en un tono ya
+//    visible, para que las regiones con pocas ofertas no queden casi blancas.
+// 2. Se aplica una raíz cuadrada al valor normalizado: las ofertas se
+//    concentran en 2-3 regiones grandes, y sin esta corrección casi todo el
+//    mapa caería en el extremo pálido de la escala.
+// Las regiones con CERO ofertas no entran en la rampa: van en gris neutro
+// (color "missing"), para distinguir "sin ofertas" de "pocas ofertas".
+const PARADAS_MAPA = [[254, 240, 138], [251, 146, 60], [239, 68, 68], [153, 27, 27]];
+
+function rampaMapa(t) {
+  t = Math.sqrt(Math.max(0, Math.min(1, t)));   // realza los valores bajos
+  const x = t * (PARADAS_MAPA.length - 1);
+  const i = Math.min(Math.floor(x), PARADAS_MAPA.length - 2);
+  const f = x - i;
+  const c = PARADAS_MAPA[i].map((v, k) => Math.round(v + (PARADAS_MAPA[i + 1][k] - v) * f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
 
 async function init() {
   try {
@@ -429,6 +563,7 @@ async function init() {
         job_location2 AS provincia,
         contract_type AS tipo_contrato,
         working_time  AS jornada,
+        studies_required AS estudios,
         experience_level AS experiencia,
         published_time   AS fecha,
         salary        AS salario,
@@ -477,14 +612,15 @@ async function init() {
 }
 
 async function poblarFiltros() {
-  const [comunidades, provincias, categorias, contratos, jornadas, experiencias, portales] = await Promise.all([
+  const [comunidades, provincias, contratos, jornadas, experiencias, portales, tramosSalario] = await Promise.all([
     conn.query(`SELECT DISTINCT comunidad FROM ofertas WHERE comunidad IS NOT NULL ORDER BY comunidad`),
     conn.query(`SELECT DISTINCT provincia FROM ofertas WHERE provincia IS NOT NULL ORDER BY provincia`),
-    conn.query(`SELECT DISTINCT categoria FROM ofertas WHERE categoria IS NOT NULL ORDER BY categoria`),
     conn.query(`SELECT DISTINCT tipo_contrato FROM ofertas WHERE tipo_contrato IS NOT NULL ORDER BY tipo_contrato`),
     conn.query(`SELECT DISTINCT jornada FROM ofertas WHERE jornada IS NOT NULL ORDER BY jornada`),
     conn.query(`SELECT DISTINCT experiencia FROM ofertas WHERE experiencia IS NOT NULL`),
     conn.query(`SELECT DISTINCT portal FROM ofertas WHERE portal IS NOT NULL ORDER BY portal`),
+    conn.query(`SELECT DISTINCT least(floor(salario / 5000) * 5000, 90000) AS tramo
+                FROM ofertas WHERE salario IS NOT NULL AND salario > 0 ORDER BY tramo`),
   ]);
 
   const fill = (id, rows, campo) => {
@@ -497,10 +633,22 @@ async function poblarFiltros() {
   };
   fill('f-comunidad', comunidades, 'comunidad');
   fill('f-provincia', provincias, 'provincia');
-  fill('f-categoria', categorias, 'categoria');
   fill('f-contrato', contratos, 'tipo_contrato');
   fill('f-jornada', jornadas, 'jornada');
   fill('f-portal', portales, 'portal');
+
+  // El filtro de salario ofrece los mismos tramos de 5.000 € que el histograma,
+  // pero solo los que realmente existen en los datos. El value guarda el inicio
+  // del tramo en euros; buildWhere lo convierte en una condición de rango.
+  const fSal = document.getElementById('f-salario');
+  const miles = v => (Number(v) / 1000) + 'k';
+  tramosSalario.toArray().forEach(r => {
+    const tramo = Number(r.tramo);
+    const opt = document.createElement('option');
+    opt.value = tramo;
+    opt.textContent = tramo >= 90000 ? '90k € o más' : `${miles(tramo)}–${miles(tramo + 5000)} €`;
+    fSal.appendChild(opt);
+  });
 
   // la experiencia se ordena por nivel (no alfabéticamente)
   const expSet = new Set(experiencias.toArray().map(r => r.experiencia));
@@ -515,13 +663,19 @@ async function poblarFiltros() {
 function buildWhere() {
   const where = [];
   const campos = {
-    comunidad: 'f-comunidad', provincia: 'f-provincia', categoria: 'f-categoria',
+    comunidad: 'f-comunidad', provincia: 'f-provincia',
     tipo_contrato: 'f-contrato', jornada: 'f-jornada', experiencia: 'f-experiencia', portal: 'f-portal',
   };
   for (const [columna, id] of Object.entries(campos)) {
     const valor = document.getElementById(id).value;
     if (valor) where.push(`${columna} = '${valor.replace(/'/g, "''")}'`);
   }
+  const tramoSalario = document.getElementById('f-salario').value;
+  if (tramoSalario !== '') {
+    const tramo = parseInt(tramoSalario, 10);
+    where.push(tramo >= 90000 ? `salario >= 90000` : `salario >= ${tramo} AND salario < ${tramo + 5000}`);
+  }
+
   const busqueda = document.getElementById('f-busqueda').value.trim().replace(/'/g, "''");
   if (busqueda) where.push(`(lower(titulo) LIKE lower('%${busqueda}%') OR lower(empresa) LIKE lower('%${busqueda}%'))`);
 
@@ -532,52 +686,78 @@ async function refresh() {
   const whereClause = buildWhere();
 
   const kpis = await conn.query(`
-    SELECT count(*) as total, sum(vacantes) as vacantes_totales, count(distinct empresa) as empresas,
+    SELECT count(*) as total, count(distinct empresa) as empresas,
            count(distinct portal) as portales, avg(salario) as salario_medio
     FROM ofertas ${whereClause}
   `);
   const k = kpis.toArray()[0];
   document.getElementById('kpi-total').textContent = Number(k.total).toLocaleString('es-ES');
-  document.getElementById('kpi-vacantes').textContent = k.vacantes_totales
-    ? Number(k.vacantes_totales).toLocaleString('es-ES') : 'n/d';
   document.getElementById('kpi-empresas').textContent = Number(k.empresas).toLocaleString('es-ES');
   document.getElementById('kpi-portales').textContent = Number(k.portales);
   document.getElementById('kpi-salario').textContent = k.salario_medio
     ? '€' + Math.round(Number(k.salario_medio)).toLocaleString('es-ES')
     : 'n/d';
 
-  // --- Ofertas por comunidad autónoma ---
-  const porComunidad = await conn.query(`
-    SELECT comunidad, count(*) as n FROM ofertas ${whereClause}
-    WHERE comunidad IS NOT NULL GROUP BY comunidad ORDER BY n DESC LIMIT 12
-  `.replace('WHERE comunidad', whereClause ? 'AND comunidad' : 'WHERE comunidad'));
-  const cRows = porComunidad.toArray();
-  if (chartComunidad) chartComunidad.destroy();
-  chartComunidad = new Chart(document.getElementById('chartComunidad'), {
-    type: 'bar',
-    data: { labels: cRows.map(r => r.comunidad), datasets: [{ data: cRows.map(r => Number(r.n)), backgroundColor: '#378ADD', borderRadius: 4 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true } }
-    }
-  });
-
-  // --- Por categoría ---
-  const porCategoria = await conn.query(`
-    SELECT categoria, count(*) as n FROM ofertas ${whereClause}
-    ${whereClause ? 'AND' : 'WHERE'} categoria IS NOT NULL GROUP BY categoria ORDER BY n DESC LIMIT 10
+  // --- Por tipo de contrato ---
+  const porContrato = await conn.query(`
+    SELECT tipo_contrato, count(*) as n FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} tipo_contrato IS NOT NULL GROUP BY tipo_contrato ORDER BY n DESC
   `);
-  const catRows = porCategoria.toArray().reverse();
-  if (chartCategoria) chartCategoria.destroy();
-  chartCategoria = new Chart(document.getElementById('chartCategoria'), {
+  const conRows = porContrato.toArray().reverse();
+  if (chartContrato) chartContrato.destroy();
+  chartContrato = new Chart(document.getElementById('chartContrato'), {
     type: 'bar',
-    data: { labels: catRows.map(r => r.categoria), datasets: [{ data: catRows.map(r => Number(r.n)), backgroundColor: '#1D9E75', borderRadius: 4 }] },
+    data: { labels: conRows.map(r => r.tipo_contrato), datasets: [{ data: conRows.map(r => Number(r.n)), backgroundColor: '#10B981', borderRadius: 4 }] },
+    plugins: [ChartDataLabels],
     options: {
       indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }
+      plugins: { legend: { display: false }, tooltip: tooltipConPorcentaje(conRows.map(r => Number(r.n))), datalabels: etiquetasPorcentaje(conRows.map(r => Number(r.n))) },
+      scales: { x: { beginAtZero: true, grace: '15%' }, y: { ticks: { font: { size: 11 } } } }
+    }
+  });
+
+  // --- Por tipo de jornada ---
+  const porJornada = await conn.query(`
+    SELECT jornada, count(*) as n FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} jornada IS NOT NULL GROUP BY jornada ORDER BY n DESC
+  `);
+  const jRows = porJornada.toArray();
+  if (chartJornada) chartJornada.destroy();
+  chartJornada = new Chart(document.getElementById('chartJornada'), {
+    type: 'bar',
+    data: { labels: jRows.map(r => r.jornada), datasets: [{ data: jRows.map(r => Number(r.n)), backgroundColor: '#F59E0B', borderRadius: 4 }] },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: tooltipConPorcentaje(jRows.map(r => Number(r.n))), datalabels: etiquetasPorcentaje(jRows.map(r => Number(r.n))) },
+      scales: { x: { ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true, grace: '15%' } }
+    }
+  });
+
+  // --- Por estudios requeridos (ordinal: de menor a mayor nivel formativo) ---
+  // Se traen todos los valores, se conservan los 12 con más ofertas si hubiera
+  // demasiados textos distintos, y se ordenan por nivel de estudios (no por
+  // número de ofertas). En horizontal, el primer nivel queda arriba.
+  const porEstudios = await conn.query(`
+    SELECT estudios, count(*) as n FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} estudios IS NOT NULL GROUP BY estudios
+  `);
+  const eRows = porEstudios.toArray()
+    .sort((a, b) => rankEstudios(a.estudios) - rankEstudios(b.estudios)
+      || String(a.estudios).localeCompare(String(b.estudios), 'es'));
+    // en barras horizontales el primer elemento se pinta arriba,
+    // así el nivel más bajo queda arriba y el más alto abajo
+  if (chartEstudios) chartEstudios.destroy();
+  chartEstudios = new Chart(document.getElementById('chartEstudios'), {
+    type: 'bar',
+    data: { labels: eRows.map(r => r.estudios), datasets: [{ data: eRows.map(r => Number(r.n)), backgroundColor: '#14B8A6', borderRadius: 4 }] },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: tooltipConPorcentaje(eRows.map(r => Number(r.n))), datalabels: etiquetasPorcentaje(eRows.map(r => Number(r.n))) },
+      scales: { x: { beginAtZero: true, grace: '15%' }, y: { ticks: { font: { size: 11 } } } }
     }
   });
 
@@ -593,12 +773,13 @@ async function refresh() {
     type: 'bar',
     data: {
       labels: expLabels,
-      datasets: [{ data: expLabels.map(e => expMap.get(e)), backgroundColor: RAMPA_EXPERIENCIA, borderRadius: 4 }],
+      datasets: [{ data: expLabels.map(e => expMap.get(e)), backgroundColor: '#3B82F6', borderRadius: 4 }],
     },
+    plugins: [ChartDataLabels],
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { font: { size: 11 } } }, y: { beginAtZero: true } }
+      plugins: { legend: { display: false }, tooltip: tooltipConPorcentaje(expLabels.map(e => expMap.get(e))), datalabels: etiquetasPorcentaje(expLabels.map(e => expMap.get(e))) },
+      scales: { x: { ticks: { font: { size: 11 } } }, y: { beginAtZero: true, grace: '15%' } }
     }
   });
 
@@ -611,12 +792,73 @@ async function refresh() {
   if (chartPortal) chartPortal.destroy();
   chartPortal = new Chart(document.getElementById('chartPortal'), {
     type: 'bar',
-    data: { labels: pRows.map(r => r.portal), datasets: [{ data: pRows.map(r => Number(r.n)), backgroundColor: '#8B5CF6', borderRadius: 4 }] },
+    data: { labels: pRows.map(r => r.portal), datasets: [{ data: pRows.map(r => Number(r.n)), backgroundColor: '#A855F7', borderRadius: 4 }] },
+    plugins: [ChartDataLabels],
     options: {
       indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }
+      plugins: { legend: { display: false }, tooltip: tooltipConPorcentaje(pRows.map(r => Number(r.n)), Number(k.total)), datalabels: etiquetasPorcentaje(pRows.map(r => Number(r.n)), Number(k.total)) },
+      scales: { x: { beginAtZero: true, grace: '15%' }, y: { ticks: { font: { size: 11 } } } }
+    }
+  });
+
+  // --- Distribución salarial (histograma en tramos de 5.000 €) ---
+  // Los salarios muy altos son pocos y estirarían el eje, así que todo lo que
+  // pasa de 90.000 € se agrupa en un último tramo "90k+". Se ignoran salarios
+  // nulos o a 0 (ofertas sin salario informado).
+  const porSalario = await conn.query(`
+    SELECT least(floor(salario / 5000) * 5000, 90000) AS tramo, count(*) AS n
+    FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} salario IS NOT NULL AND salario > 0
+    GROUP BY tramo ORDER BY tramo
+  `);
+  const salRows = porSalario.toArray();
+  const fmtMiles = v => (Number(v) / 1000) + 'k';
+  if (chartSalario) chartSalario.destroy();
+  chartSalario = new Chart(document.getElementById('chartSalario'), {
+    type: 'bar',
+    data: {
+      labels: salRows.map(r => Number(r.tramo) >= 90000 ? '90k+' : `${fmtMiles(r.tramo)}–${fmtMiles(Number(r.tramo) + 5000)}`),
+      datasets: [{ data: salRows.map(r => Number(r.n)), backgroundColor: '#F97316', borderRadius: 4 }],
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltipConPorcentaje(salRows.map(r => Number(r.n))),
+        // Con ~19 tramos las etiquetas irían muy juntas: se rotan y se encogen.
+        datalabels: { ...etiquetasPorcentaje(salRows.map(r => Number(r.n))), rotation: -90, font: { size: 9, weight: '500' } },
+      },
+      scales: { x: { ticks: { autoSkip: false, maxRotation: 45, font: { size: 11 } } }, y: { beginAtZero: true, grace: '20%' } }
+    }
+  });
+
+  // --- Salario medio por comunidad autónoma (de mayor a menor) ---
+  // La media solo tiene sentido sobre ofertas con salario informado. El
+  // tooltip incluye cuántas ofertas hay detrás de cada media para poder
+  // valorar si es representativa (una media de 3 ofertas dice poco).
+  const salPorComunidad = await conn.query(`
+    SELECT comunidad, avg(salario) AS media, count(*) AS n
+    FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} comunidad IS NOT NULL AND salario IS NOT NULL AND salario > 0
+    GROUP BY comunidad ORDER BY media DESC
+  `);
+  const scRows = salPorComunidad.toArray();
+  if (chartSalarioComunidad) chartSalarioComunidad.destroy();
+  chartSalarioComunidad = new Chart(document.getElementById('chartSalarioComunidad'), {
+    type: 'bar',
+    data: { labels: scRows.map(r => r.comunidad), datasets: [{ data: scRows.map(r => Math.round(Number(r.media))), backgroundColor: '#EC4899', borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => ` €${Number(ctx.raw).toLocaleString('es-ES')} de media (${Number(scRows[ctx.dataIndex].n).toLocaleString('es-ES')} ofertas)` } },
+      },
+      scales: {
+        x: { ticks: { autoSkip: false, maxRotation: 60, font: { size: 10 } } },
+        y: { beginAtZero: true, ticks: { callback: v => '€' + Number(v).toLocaleString('es-ES') } },
+      }
     }
   });
 
@@ -647,7 +889,7 @@ async function refresh() {
     type: 'bar',
     data: {
       labels: sRows.map(r => new Date(r.semana).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })),
-      datasets: [{ data: sRows.map(r => Number(r.n)), backgroundColor: '#185fa5', borderRadius: 4 }],
+      datasets: [{ data: sRows.map(r => Number(r.n)), backgroundColor: '#0EA5E9', borderRadius: 4 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
