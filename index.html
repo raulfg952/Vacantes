@@ -502,12 +502,24 @@ async function refreshMapa() {
   // los datos reales (por defecto se queda en 0–100000 pase lo que pase), así
   // que hay que fijar min/max a mano en cada refresco o la leyenda no cambia
   // entre "nº ofertas" y "salario medio" ni aprovecha todo el rango de color.
-  // En modo salario el mínimo también se ajusta al dato real (no a 0): un
-  // salario medio nunca ronda 0 €, así que partir de 0 aplastaría toda la
-  // variación útil en el extremo alto de la rampa.
   const valoresRango = [...valores.values()].map(v => v.value).filter(v => v != null);
-  const maxValor = valoresRango.length ? Math.max(...valoresRango) : 1;
-  const minValor = esSalario && valoresRango.length ? Math.min(...valoresRango) : 0;
+
+  let minValor, maxValor;
+  if (esSalario) {
+    // El salario medio se ve arrastrado por regiones con muestra pequeña muy
+    // alejadas del resto (Ceuta arriba, 18 ofertas; Melilla abajo, 10): se
+    // recorta el rango a los percentiles 5-95 de las regiones actuales para
+    // que esas dos saturen a los extremos de la rampa (su cifra real se sigue
+    // viendo en el tooltip) en vez de aplastar la diferencia de color entre
+    // el resto de regiones. Tampoco tendría sentido partir de 0: un salario
+    // medio nunca ronda esa cifra.
+    const ordenados = valoresRango.slice().sort((a, b) => a - b);
+    minValor = percentil(ordenados, 0.05);
+    maxValor = Math.max(percentil(ordenados, 0.95), 1);
+  } else {
+    minValor = 0;
+    maxValor = valoresRango.length ? Math.max(...valoresRango) : 1;
+  }
 
   if (chartMapa) chartMapa.destroy();
   chartMapa = new Chart(document.getElementById('chartMapa'), {
@@ -678,6 +690,15 @@ function rampaMapa(t, boost = true) {
   const f = x - i;
   const c = PARADAS_MAPA[i].map((v, k) => Math.round(v + (PARADAS_MAPA[i + 1][k] - v) * f));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// Percentil por rango más cercano (nearest-rank) sobre un array YA ordenado
+// ascendentemente. Se usa para recortar los extremos de la escala de color
+// del mapa sin que dependan de regiones con muestra pequeña.
+function percentil(valoresOrdenadosAsc, p) {
+  if (!valoresOrdenadosAsc.length) return 0;
+  const idx = Math.min(valoresOrdenadosAsc.length - 1, Math.floor(p * (valoresOrdenadosAsc.length - 1)));
+  return valoresOrdenadosAsc[idx];
 }
 
 // --- Filtros: aplicar desde un clic en un gráfico ---------------------------
