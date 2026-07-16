@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard de ofertas de empleo</title>
+<title>Panel de control de ofertas de empleo</title>
 <style>
   :root {
     --bg: #f7f7f5;
@@ -99,26 +99,8 @@
   .heatmap-row-label { justify-content: flex-start; text-align: left; padding-left: 4px; }
   .heatmap-corner { background: transparent !important; }
 
-  .table-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
-  .table-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 1rem 1.25rem; border-bottom: 0.5px solid var(--border); }
-  .table-header .chart-title { margin: 0; }
   .table-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .table-controls input, .table-controls select { height: 32px; min-width: 0; font-size: 13px; }
-  .table-controls .clear-btn { height: 32px; white-space: nowrap; }
-  .table-count { font-size: 13px; color: var(--text-tertiary); white-space: nowrap; }
-  .table-wrap { overflow: auto; max-height: 420px; }
-  table { width: 100%; font-size: 13px; border-collapse: collapse; }
-  th { text-align: left; padding: 10px 16px; font-weight: 500; color: var(--text-secondary); background: var(--surface); position: sticky; top: 0; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
-  th.sortable { cursor: pointer; user-select: none; }
-  th.sortable:hover { color: var(--text-primary); }
-  .sort-arrow { display: inline-block; width: 10px; opacity: 0.7; font-size: 10px; }
-  td { padding: 10px 16px; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #fafaf8; }
-  a.row-link { color: var(--accent); text-decoration: none; }
-  a.row-link:hover { text-decoration: underline; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 12px; background: var(--accent-light); color: #0c447c; }
-  .badge-portal { background: #f1eaff; color: #5b21b6; }
+  .table-controls select { height: 32px; min-width: 0; font-size: 13px; }
   .empty-state { padding: 2.5rem; text-align: center; color: var(--text-tertiary); font-size: 14px; }
 
   footer { margin-top: 1.5rem; text-align: center; font-size: 12px; color: var(--text-tertiary); }
@@ -133,7 +115,7 @@
 <body>
 <div class="container">
   <header>
-    <h1>Dashboard de ofertas de empleo</h1>
+    <h1>Panel de control de ofertas de empleo</h1>
     <p class="subtitle">Ofertas armonizadas desde más de 20 portales de empleo españoles</p>
   </header>
 
@@ -153,11 +135,14 @@
         <li><b>Estudios requeridos</b>: se mapea a los niveles educativos de la CNED-2014 (INE), de "Sin estudios" a "Doctorado", conservando la titulación mínima cuando la oferta lista varias.</li>
         <li><b>Modalidad de trabajo</b>: se agrupa en Presencial / Híbrido / Remoto a partir del campo libre del portal; el resto de valores (ubicación del puesto, "no informado"...) se trata como no informado.</li>
       </ul>
-      Este dashboard se sirve como una página estática en GitHub Pages: el fichero <code>ofertas.parquet</code>
+      Este panel de control se sirve como una página estática en GitHub Pages: el fichero <code>ofertas.parquet</code>
       se descarga una sola vez y todas las consultas (filtros, agregados, gráficas) se ejecutan en el
       propio navegador con <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>.
       Los gráficos de barras y el mapa también actúan como filtros: haz clic en una barra o una región
-      para acotar el resto del dashboard a ese valor (vuelve a hacer clic para quitarlo).
+      para acotar el resto del panel a ese valor (vuelve a hacer clic para quitarlo).
+      <p style="margin: 10px 0 0;"><b>Aviso:</b> estos son datos iniciales de una primera prueba del pipeline,
+      todavía sin comprobar su calidad (duplicados, salarios mal parseados, ubicaciones o categorías
+      incorrectas...). Las cifras de este panel son orientativas y no deben tomarse como definitivas.</p>
     </div>
   </details>
 
@@ -293,7 +278,38 @@
     </div>
   </div>
 
-  <div class="chart-card" style="margin-bottom: 20px;">
+  <div class="charts-secondary">
+    <div class="chart-card">
+      <div class="map-header">
+        <div>
+          <p class="chart-title">Cruce de variables</p>
+          <p class="chart-subtitle" id="heatmap-subtitle">Nº de ofertas para cada combinación — más intensidad de color, más ofertas</p>
+        </div>
+        <div>
+          <div class="table-controls">
+            <select id="heatmap-fila" aria-label="Variable de filas"></select>
+            <span style="font-size:12px; color:var(--text-tertiary);">×</span>
+            <select id="heatmap-columna" aria-label="Variable de columnas"></select>
+          </div>
+          <div class="map-toggle" role="group" aria-label="Cómo mostrar los valores" style="margin-top:8px;">
+            <button id="heatmap-modo-n" class="active">Nº</button>
+            <button id="heatmap-modo-fila">% fila</button>
+            <button id="heatmap-modo-total">% total</button>
+          </div>
+        </div>
+      </div>
+      <div id="heatmap" style="overflow-x:auto;"></div>
+    </div>
+    <div class="chart-card">
+      <p class="chart-title">Evolución temporal</p>
+      <p class="chart-subtitle">Ofertas publicadas por semana, últimas 12 semanas con datos</p>
+      <div style="position:relative; height:260px;">
+        <canvas id="chartTendencia" role="img" aria-label="Gráfico de barras de ofertas publicadas por semana en las últimas 12 semanas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom: 1.5rem;">
     <div class="map-header">
       <div>
         <p class="chart-title">Salario medio por variable</p>
@@ -307,21 +323,6 @@
     </div>
     <div style="position:relative; height:240px;">
       <canvas id="chartSalarioVar" role="img" aria-label="Gráfico combinado de salario medio y número de ofertas por la variable seleccionada"></canvas>
-    </div>
-  </div>
-
-  <div class="charts-secondary">
-    <div class="chart-card">
-      <p class="chart-title">Estudios × Experiencia exigida</p>
-      <p class="chart-subtitle">Nº de ofertas para cada combinación — más intensidad de color, más ofertas</p>
-      <div id="heatmap" style="overflow-x:auto;"></div>
-    </div>
-    <div class="chart-card">
-      <p class="chart-title">Evolución temporal</p>
-      <p class="chart-subtitle">Ofertas publicadas por semana, últimas 12 semanas con datos</p>
-      <div style="position:relative; height:260px;">
-        <canvas id="chartTendencia" role="img" aria-label="Gráfico de barras de ofertas publicadas por semana en las últimas 12 semanas"></canvas>
-      </div>
     </div>
   </div>
 
@@ -355,6 +356,9 @@ let portalVista = 'barras';                  // 'barras' | 'treemap'
 let distCampo1 = 'tipo_contrato';            // 'tipo_contrato' | 'estudios'
 let distCampo2 = 'experiencia';              // 'experiencia' | 'modalidad' | 'jornada'
 let salarioCampo = 'comunidad';              // 'estudios' | 'comunidad' | 'experiencia'
+let heatmapFila = 'estudios';                // variable de filas del cruce
+let heatmapColumna = 'experiencia';          // variable de columnas del cruce
+let heatmapModo = 'n';                       // 'n' | 'fila' | 'total'
 const geoNiveles = { comunidad: null, provincia: null };  // features + índice de nombres por nivel
 
 // Filtros que no tienen <select> propio (se activan solo haciendo clic en un
@@ -584,12 +588,6 @@ function esc(s) {
   }[c]));
 }
 
-// Solo se enlaza si de verdad parece una URL http(s); si no, se muestra como
-// texto plano en vez de como link (evita esquemas raros tipo "javascript:").
-function safeHref(url) {
-  return /^https?:\/\//i.test(String(url || '')) ? esc(url) : '';
-}
-
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
@@ -619,6 +617,13 @@ const ORDEN_ESTUDIOS = [
 // del resto de variables): se bucketiza aquí mismo, en la consulta SQL de
 // creación de la tabla, a partir del campo libre "work_place" del portal.
 const ORDEN_MODALIDAD = ['Presencial', 'Híbrido', 'Remoto'];
+
+// Contrato y jornada no son ordinales de verdad, pero necesitan un orden fijo
+// igualmente para que los ejes del cruce de variables no bailen de sitio al
+// cambiar de filtro (si se ordenara por frecuencia, la fila/columna con más
+// ofertas cambiaría de posición cada vez).
+const ORDEN_CONTRATO = ['Indefinido', 'Temporal', 'Fijo discontinuo', 'Autónomo', 'Prácticas/Formación', 'Otro'];
+const ORDEN_JORNADA = ['Completa', 'Parcial', 'Otra'];
 
 // Etiquetas de porcentaje impresas sobre las barras (plugin datalabels).
 // El plugin NO se registra globalmente a propósito: solo se activa en las
@@ -806,6 +811,67 @@ async function pintarSalarioPorVariable(chartActual, canvasId, campo) {
   });
 }
 
+// --- Cruce de variables (heatmap): filas y columnas elegibles ---------------
+// Mismas 5 variables categóricas "manejables" que en Distribución de ofertas
+// (se deja fuera comunidad/portal por cardinalidad: 19 y 27 valores harían
+// una cuadrícula demasiado grande para leerse de un vistazo).
+const HEATMAP_CONFIG = {
+  tipo_contrato: { etiqueta: 'Contrato', orden: ORDEN_CONTRATO },
+  estudios:      { etiqueta: 'Estudios', orden: ORDEN_ESTUDIOS },
+  experiencia:   { etiqueta: 'Experiencia', orden: ORDEN_EXPERIENCIA },
+  modalidad:     { etiqueta: 'Modalidad', orden: ORDEN_MODALIDAD },
+  jornada:       { etiqueta: 'Jornada', orden: ORDEN_JORNADA },
+};
+
+// A partir de los recuentos brutos, calcula lo que hay que pintar según el
+// modo elegido: nº de ofertas, % sobre el total de su fila, o % sobre el
+// total del cruce entero. Los tres parten del mismo mapa de recuentos, solo
+// cambia el denominador.
+function valoresHeatmapSegunModo(heatRows, filas, columnas, modo) {
+  const raw = new Map(heatRows.map(r => [`${r.fila}||${r.columna}`, Number(r.n)]));
+  if (modo === 'n') return raw;
+
+  if (modo === 'fila') {
+    const totalPorFila = new Map(filas.map(f => [
+      f, columnas.reduce((suma, c) => suma + (raw.get(`${f}||${c}`) || 0), 0),
+    ]));
+    const out = new Map();
+    raw.forEach((v, key) => {
+      const total = totalPorFila.get(key.split('||')[0]) || 0;
+      out.set(key, total ? v / total * 100 : 0);
+    });
+    return out;
+  }
+
+  // modo 'total': % sobre la suma de todas las celdas del cruce
+  const granTotal = [...raw.values()].reduce((suma, v) => suma + v, 0);
+  const out = new Map();
+  raw.forEach((v, key) => out.set(key, granTotal ? v / granTotal * 100 : 0));
+  return out;
+}
+
+async function pintarHeatmap() {
+  const whereClause = buildWhere();
+  const heat = await conn.query(`
+    SELECT ${heatmapFila} AS fila, ${heatmapColumna} AS columna, count(*) AS n
+    FROM ofertas ${whereClause}
+    ${whereClause ? 'AND' : 'WHERE'} ${heatmapFila} IS NOT NULL AND ${heatmapColumna} IS NOT NULL
+    GROUP BY fila, columna
+  `);
+  const heatRows = heat.toArray();
+  const filas = HEATMAP_CONFIG[heatmapFila].orden.filter(v => heatRows.some(r => r.fila === v));
+  const columnas = HEATMAP_CONFIG[heatmapColumna].orden.filter(v => heatRows.some(r => r.columna === v));
+  const valores = valoresHeatmapSegunModo(heatRows, filas, columnas, heatmapModo);
+  const maxHeat = Math.max(1, ...valores.values());
+  renderHeatmap(filas, columnas, valores, maxHeat, heatmapModo);
+
+  const descModo = heatmapModo === 'n' ? 'nº de ofertas por combinación'
+    : heatmapModo === 'fila' ? '% sobre el total de cada fila'
+    : '% sobre el total del cruce';
+  document.getElementById('heatmap-subtitle').textContent =
+    `${HEATMAP_CONFIG[heatmapFila].etiqueta} × ${HEATMAP_CONFIG[heatmapColumna].etiqueta} — ${descModo}, más intensidad de color, más valor`;
+}
+
 // --- Filtros activos: leer el estado actual de la UI -------------------------
 const FILTRO_LABELS = {
   'f-comunidad': 'Comunidad', 'f-provincia': 'Provincia', 'f-contrato': 'Contrato',
@@ -826,10 +892,7 @@ function renderChips() {
     chips.push({ texto: `Salario: ${fSal.selectedOptions[0]?.textContent ?? fSal.value}`, quitar: () => { fSal.value = ''; refresh(); } });
   }
   const busq = document.getElementById('f-busqueda').value.trim();
-  if (busq) chips.push({ texto: `Búsqueda: "${busq}"`, quitar: () => {
-    document.getElementById('f-busqueda').value = '';
-    refresh();
-  } });
+  if (busq) chips.push({ texto: `Búsqueda: "${busq}"`, quitar: () => { document.getElementById('f-busqueda').value = ''; refresh(); } });
   if (extraFiltros.municipio) {
     chips.push({ texto: `Ciudad: ${extraFiltros.municipio}`, quitar: () => { delete extraFiltros.municipio; refresh(); } });
   }
@@ -930,7 +993,7 @@ async function init() {
     statusEl.style.display = 'none';
 
     // El atlas del mapa se carga aparte: si fallara (CDN caído, sin red),
-    // el resto del dashboard sigue funcionando y solo se queda sin mapa.
+    // el resto del panel sigue funcionando y solo se queda sin mapa.
     try {
       await cargarAtlas();
     } catch (err) {
@@ -971,7 +1034,7 @@ async function init() {
     // Selectores de variable de los gráficos "Distribución de ofertas" y
     // "Salario medio por variable": igual que el toggle Comunidades/
     // Provincias del mapa, solo repintan su propio gráfico, no todo el
-    // dashboard.
+    // panel.
     for (const campo of ['tipo_contrato', 'estudios']) {
       document.getElementById(`dist1-${campo}`).addEventListener('click', async () => {
         distCampo1 = campo;
@@ -1000,11 +1063,36 @@ async function init() {
       });
     }
 
+    // Selectores de fila/columna del cruce de variables (heatmap). Se
+    // rellenan una vez con las 5 variables "manejables" (mismo conjunto que
+    // Distribución de ofertas) y se deshabilita en cada uno la opción ya
+    // elegida en el otro, para no poder cruzar una variable consigo misma.
+    const selFila = document.getElementById('heatmap-fila');
+    const selColumna = document.getElementById('heatmap-columna');
+    for (const [campo, cfg] of Object.entries(HEATMAP_CONFIG)) {
+      selFila.add(new Option(cfg.etiqueta, campo, campo === heatmapFila, campo === heatmapFila));
+      selColumna.add(new Option(cfg.etiqueta, campo, campo === heatmapColumna, campo === heatmapColumna));
+    }
+    function actualizarOpcionesHeatmap() {
+      Array.from(selFila.options).forEach(opt => { opt.disabled = opt.value === heatmapColumna; });
+      Array.from(selColumna.options).forEach(opt => { opt.disabled = opt.value === heatmapFila; });
+    }
+    selFila.addEventListener('change', e => { heatmapFila = e.target.value; actualizarOpcionesHeatmap(); pintarHeatmap(); });
+    selColumna.addEventListener('change', e => { heatmapColumna = e.target.value; actualizarOpcionesHeatmap(); pintarHeatmap(); });
+    actualizarOpcionesHeatmap();
+    for (const modo of ['n', 'fila', 'total']) {
+      document.getElementById(`heatmap-modo-${modo}`).addEventListener('click', () => {
+        heatmapModo = modo;
+        ['n', 'fila', 'total'].forEach(m =>
+          document.getElementById(`heatmap-modo-${m}`).classList.toggle('active', m === modo));
+        pintarHeatmap();
+      });
+    }
+
     await poblarFiltros();
     restoreFromURL();   // aplica ?f-comunidad=...&f-portal=... si la URL trae una vista compartida
     document.querySelectorAll('.filters select').forEach(el => el.addEventListener('change', refresh));
-    const buscarDebounced = debounce(refresh, 250);
-    document.getElementById('f-busqueda').addEventListener('input', buscarDebounced);
+    document.getElementById('f-busqueda').addEventListener('input', debounce(refresh, 250));
     document.getElementById('clear-filters').addEventListener('click', () => {
       document.querySelectorAll('.filters select').forEach(s => s.value = '');
       document.getElementById('f-busqueda').value = '';
@@ -1312,18 +1400,8 @@ async function refresh() {
   chartSalarioVar = await pintarSalarioPorVariable(chartSalarioVar, 'chartSalarioVar', salarioCampo);
   document.getElementById('salario-var-subtitle').textContent = SALARIO_CONFIG[salarioCampo].subtitulo;
 
-  // --- Heatmap Estudios × Experiencia (grid HTML propio, sin librería extra) ---
-  const heat = await conn.query(`
-    SELECT estudios, experiencia, count(*) AS n FROM ofertas ${whereClause}
-    ${whereClause ? 'AND' : 'WHERE'} estudios IS NOT NULL AND experiencia IS NOT NULL
-    GROUP BY estudios, experiencia
-  `);
-  const heatRows = heat.toArray();
-  const heatMapa = new Map(heatRows.map(r => [`${r.estudios}||${r.experiencia}`, Number(r.n)]));
-  const heatEstudios = ORDEN_ESTUDIOS.filter(e => heatRows.some(r => r.estudios === e));
-  const heatExperiencia = ORDEN_EXPERIENCIA.filter(e => heatRows.some(r => r.experiencia === e));
-  const maxHeat = Math.max(1, ...heatRows.map(r => Number(r.n)));
-  renderHeatmap(heatEstudios, heatExperiencia, heatMapa, maxHeat);
+  // --- Cruce de variables (heatmap, filas/columnas elegibles) ---
+  await pintarHeatmap();
 
   // --- Habilidades y requisitos más demandados ---
   const condiciones = PALABRAS_CLAVE_SKILLS.map(p => {
@@ -1371,24 +1449,27 @@ async function refresh() {
 
 }
 
-function renderHeatmap(filas, columnas, mapa, max) {
+function renderHeatmap(filas, columnas, mapa, max, modo) {
   const cont = document.getElementById('heatmap');
   if (!filas.length || !columnas.length) {
     cont.innerHTML = '<p class="empty-state">No hay datos suficientes para este cruce con los filtros actuales</p>';
     return;
   }
+  const formatear = v => modo === 'n'
+    ? v.toLocaleString('es-ES')
+    : v.toLocaleString('es-ES', { maximumFractionDigits: 1 }) + '%';
   let html = `<div class="heatmap-grid" style="grid-template-columns:170px repeat(${columnas.length},1fr);">`;
   html += '<div class="heatmap-cell heatmap-corner"></div>';
   columnas.forEach(c => { html += `<div class="heatmap-cell heatmap-head">${esc(c)}</div>`; });
   filas.forEach(fila => {
     html += `<div class="heatmap-cell heatmap-head heatmap-row-label">${esc(fila)}</div>`;
     columnas.forEach(col => {
-      const n = mapa.get(`${fila}||${col}`) || 0;
-      const t = n / max;
+      const v = mapa.get(`${fila}||${col}`) || 0;
+      const t = v / max;
       const bg = `rgba(24,95,165,${(0.06 + t * 0.85).toFixed(2)})`;
       const color = t > 0.5 ? '#fff' : 'var(--text-primary)';
-      const titulo = `${fila} / ${col}: ${n.toLocaleString('es-ES')} ofertas`;
-      html += `<div class="heatmap-cell heatmap-value" style="background:${bg};color:${color}" title="${esc(titulo)}">${n ? n.toLocaleString('es-ES') : ''}</div>`;
+      const titulo = `${fila} / ${col}: ${formatear(v)}`;
+      html += `<div class="heatmap-cell heatmap-value" style="background:${bg};color:${color}" title="${esc(titulo)}">${v ? formatear(v) : ''}</div>`;
     });
   });
   html += '</div>';
