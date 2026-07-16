@@ -325,46 +325,6 @@
     </div>
   </div>
 
-  <div class="table-card">
-    <div class="table-header">
-      <p class="chart-title">Detalle de ofertas</p>
-      <div class="table-controls">
-        <input type="text" id="tabla-busqueda" placeholder="Buscar en el listado...">
-        <select id="tabla-orden" aria-label="Ordenar por">
-          <option value="fecha">Ordenar por: Fecha</option>
-          <option value="titulo">Ordenar por: Título</option>
-          <option value="empresa">Ordenar por: Empresa</option>
-          <option value="categoria">Ordenar por: Categoría</option>
-          <option value="comunidad">Ordenar por: Comunidad</option>
-          <option value="tipo_contrato">Ordenar por: Contrato</option>
-          <option value="jornada">Ordenar por: Jornada</option>
-          <option value="experiencia">Ordenar por: Experiencia</option>
-          <option value="portal">Ordenar por: Portal</option>
-          <option value="salario">Ordenar por: Salario</option>
-        </select>
-        <button class="clear-btn" id="tabla-orden-dir" title="Cambiar dirección del orden">↓ Descendente</button>
-        <span class="table-count" id="table-count"></span>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th class="sortable" data-col="titulo">Título<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="empresa">Empresa<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="categoria">Categoría<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="comunidad">Comunidad<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="tipo_contrato">Contrato<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="jornada">Jornada<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="experiencia">Experiencia<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="portal">Portal<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="fecha">Fecha<span class="sort-arrow"></span></th>
-          <th class="sortable" data-col="salario">Salario<span class="sort-arrow"></span></th>
-        </tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
   <footer>
     Datos armonizados con un pipeline propio en Python · Visualización con DuckDB-WASM + Chart.js
   </footer>
@@ -395,7 +355,6 @@ let portalVista = 'barras';                  // 'barras' | 'treemap'
 let distCampo1 = 'tipo_contrato';            // 'tipo_contrato' | 'estudios'
 let distCampo2 = 'experiencia';              // 'experiencia' | 'modalidad' | 'jornada'
 let salarioCampo = 'comunidad';              // 'estudios' | 'comunidad' | 'experiencia'
-let sortCol = 'fecha', sortDir = 'DESC';     // orden de la tabla de detalle
 const geoNiveles = { comunidad: null, provincia: null };  // features + índice de nombres por nivel
 
 // Filtros que no tienen <select> propio (se activan solo haciendo clic en un
@@ -733,17 +692,6 @@ function onClickBarra(selectId, labels) {
   };
 }
 
-// --- Orden de la tabla de detalle --------------------------------------------
-// Compartida por el clic en cabecera y por el selector "Ordenar por" junto al
-// listado. Reelegir la misma columna invierte la dirección; una columna nueva
-// arranca en la dirección que suele tener más sentido (fecha/salario de mayor
-// a menor, el resto alfabético/ordinal ascendente).
-function aplicarOrden(col) {
-  if (sortCol === col) sortDir = sortDir === 'ASC' ? 'DESC' : 'ASC';
-  else { sortCol = col; sortDir = col === 'fecha' || col === 'salario' ? 'DESC' : 'ASC'; }
-  refresh();
-}
-
 // --- Distribución de ofertas: un único gráfico reutilizado por variable ------
 // Las 5 variables categóricas (contrato, estudios, experiencia, modalidad,
 // jornada) se pintaban antes como 5 gráficos casi idénticos; ahora comparten
@@ -880,7 +828,6 @@ function renderChips() {
   const busq = document.getElementById('f-busqueda').value.trim();
   if (busq) chips.push({ texto: `Búsqueda: "${busq}"`, quitar: () => {
     document.getElementById('f-busqueda').value = '';
-    document.getElementById('tabla-busqueda').value = '';
     refresh();
   } });
   if (extraFiltros.municipio) {
@@ -1053,35 +1000,14 @@ async function init() {
       });
     }
 
-    // Ordenar la tabla: por clic en cabecera o desde el selector "Ordenar
-    // por" junto al listado (mismo estado sortCol/sortDir para los dos, así
-    // que usar uno actualiza al otro). Clic en la misma columna = invierte
-    // la dirección; columna nueva = dirección por defecto según el tipo.
-    document.querySelectorAll('th.sortable').forEach(th => {
-      th.addEventListener('click', () => aplicarOrden(th.dataset.col));
-    });
-    document.getElementById('tabla-orden').addEventListener('change', e => aplicarOrden(e.target.value));
-    document.getElementById('tabla-orden-dir').addEventListener('click', () => {
-      sortDir = sortDir === 'ASC' ? 'DESC' : 'ASC';
-      refresh();
-    });
-
     await poblarFiltros();
     restoreFromURL();   // aplica ?f-comunidad=...&f-portal=... si la URL trae una vista compartida
     document.querySelectorAll('.filters select').forEach(el => el.addEventListener('change', refresh));
     const buscarDebounced = debounce(refresh, 250);
     document.getElementById('f-busqueda').addEventListener('input', buscarDebounced);
-    // El buscador junto al listado es un segundo control para el mismo
-    // filtro (conviene tenerlo a mano sin volver a subir a la barra de
-    // filtros): escribe en f-busqueda y dispara el mismo refresco.
-    document.getElementById('tabla-busqueda').addEventListener('input', e => {
-      document.getElementById('f-busqueda').value = e.target.value;
-      buscarDebounced();
-    });
     document.getElementById('clear-filters').addEventListener('click', () => {
       document.querySelectorAll('.filters select').forEach(s => s.value = '');
       document.getElementById('f-busqueda').value = '';
-      document.getElementById('tabla-busqueda').value = '';
       Object.keys(extraFiltros).forEach(k => delete extraFiltros[k]);
       refresh();
     });
@@ -1443,53 +1369,6 @@ async function refresh() {
     }
   });
 
-  // --- Tabla de detalle (ordenable por cabecera o por el selector junto al listado) ---
-  const SORTABLE_COLS = new Set(['titulo', 'empresa', 'categoria', 'comunidad', 'tipo_contrato', 'jornada', 'experiencia', 'portal', 'fecha', 'salario']);
-  if (!SORTABLE_COLS.has(sortCol)) sortCol = 'fecha';
-  const ordenExpr = sortCol === 'fecha' ? `strptime(fecha, '%d/%m/%Y')` : sortCol;
-  document.querySelectorAll('th.sortable').forEach(th => {
-    th.querySelector('.sort-arrow').textContent = th.dataset.col === sortCol ? (sortDir === 'ASC' ? '▲' : '▼') : '';
-  });
-  document.getElementById('tabla-orden').value = sortCol;
-  document.getElementById('tabla-orden-dir').textContent = sortDir === 'ASC' ? '↑ Ascendente' : '↓ Descendente';
-  // Solo se reescribe si difiere: evita saltar el cursor mientras se escribe
-  // en este mismo campo (ya se propagó a f-busqueda de forma síncrona antes
-  // de que el refresco debounced llegue aquí).
-  const tablaBusq = document.getElementById('tabla-busqueda');
-  const valorBusq = document.getElementById('f-busqueda').value;
-  if (tablaBusq.value !== valorBusq) tablaBusq.value = valorBusq;
-
-  const detalle = await conn.query(`
-    SELECT titulo, empresa, categoria, comunidad, tipo_contrato, jornada, experiencia, portal, fecha, salario, url
-    FROM ofertas ${whereClause} ORDER BY ${ordenExpr} ${sortDir} NULLS LAST LIMIT 100
-  `);
-  const rows = detalle.toArray();
-  document.getElementById('table-count').textContent = `Mostrando ${rows.length} de ${Number(k.total).toLocaleString('es-ES')}`;
-
-  const tbody = document.getElementById('tbody');
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No hay ofertas que coincidan con estos filtros</td></tr>`;
-  } else {
-    tbody.innerHTML = rows.map(r => {
-      const salario = r.salario ? '€' + Math.round(Number(r.salario)).toLocaleString('es-ES') : '<span style="color:var(--text-tertiary)">n/d</span>';
-      const href = safeHref(r.url);
-      const tituloCell = href
-        ? `<a class="row-link" href="${href}" target="_blank" rel="noopener">${esc(r.titulo)}</a>`
-        : esc(r.titulo);
-      return `<tr>
-        <td>${tituloCell}</td>
-        <td>${esc(r.empresa)}</td>
-        <td><span class="badge">${esc(r.categoria)}</span></td>
-        <td>${esc(r.comunidad) || 'n/d'}</td>
-        <td>${esc(r.tipo_contrato) || 'n/d'}</td>
-        <td>${esc(r.jornada) || 'n/d'}</td>
-        <td>${esc(r.experiencia) || 'n/d'}</td>
-        <td><span class="badge badge-portal">${esc(r.portal)}</span></td>
-        <td>${esc(r.fecha) || 'n/d'}</td>
-        <td>${salario}</td>
-      </tr>`;
-    }).join('');
-  }
 }
 
 function renderHeatmap(filas, columnas, mapa, max) {
