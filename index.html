@@ -388,7 +388,7 @@ function normRegion(s) {
     const [a, b] = s.split(',');
     s = `${b} ${a}`;
   }
-  s = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  s = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   s = s.replace(/[^a-z0-9]+/g, ' ').trim();
   const relleno = new Set(['a', 'de', 'del', 'la', 'las', 'el', 'los', 'comunidad',
     'comunitat', 'foral', 'principado', 'region', 'ciudad', 'autonoma', 'illes', 'islas']);
@@ -956,6 +956,40 @@ function restoreFromURL() {
   if (mun) extraFiltros.municipio = mun;
 }
 
+// --- Descarga del parquet completo en memoria ---------------------------------
+// Antes se registraba con registerFileURL (protocolo HTTP), que hace lecturas
+// parciales (range requests). Al recargar, la caché del navegador mezclaba
+// trozos viejos y nuevos y DuckDB fallaba con "ZSTD Decompression failure".
+// Ahora se descarga el fichero entero (~30 MB) y se registra como buffer.
+async function descargarParquet(url) {
+  const resp = await fetch(url, { cache: 'no-cache' });
+  if (!resp.ok) throw new Error(`No se pudo descargar ofertas.parquet (HTTP ${resp.status})`);
+
+  const total = Number(resp.headers.get('content-length')) || 0;
+  const reader = resp.body.getReader();
+  const trozos = [];
+  let recibido = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    trozos.push(value);
+    recibido += value.length;
+    if (total) {
+      statusEl.innerHTML = `<span class="spinner"></span> Descargando ofertas.parquet... ${Math.min(100, Math.round(recibido / total * 100))}%`;
+    }
+  }
+  const buf = new Uint8Array(recibido);
+  let pos = 0;
+  for (const t of trozos) { buf.set(t, pos); pos += t.length; }
+
+  // Un parquet válido empieza con los bytes "PAR1"
+  const magic = String.fromCharCode(...buf.slice(0, 4));
+  if (magic !== 'PAR1') {
+    throw new Error('ofertas.parquet no es un parquet válido (¿puntero de Git LFS o descarga corrupta?)');
+  }
+  return buf;
+}
+
 async function init() {
   try {
     const bundles = duckdb.getJsDelivrBundles();
@@ -965,9 +999,12 @@ async function init() {
     const db = new duckdb.AsyncDuckDB(logger, worker);
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
-    statusEl.innerHTML = '<span class="spinner"></span> Descargando y leyendo ofertas.parquet...';
+    statusEl.innerHTML = '<span class="spinner"></span> Descargando ofertas.parquet...';
 
-    await db.registerFileURL('ofertas.parquet', new URL('ofertas.parquet', window.location.href).href, duckdb.DuckDBDataProtocol.HTTP, false);
+    const buf = await descargarParquet(new URL('ofertas.parquet', window.location.href).href);
+    await db.registerFileBuffer('ofertas.parquet', buf);
+    statusEl.innerHTML = '<span class="spinner"></span> Leyendo ofertas.parquet...';
+
     conn = await db.connect();
     // Renombramos aquí, en la propia consulta, a nombres cortos en español
     // para el resto del script — las columnas de origen son las del pipeline
