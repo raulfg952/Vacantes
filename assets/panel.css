@@ -109,15 +109,21 @@ details.about ul { margin: 6px 0 0; padding-left: 20px; }
 .mes-chip:hover { background: var(--surface-2); }
 .mes-chip[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); font-weight: 500; }
 
-.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1000px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* 7 cifras compactas en una fila (la principal, algo más ancha) */
+.kpis { display: grid; grid-template-columns: 1.4fr repeat(6, minmax(0, 1fr)); gap: 10px; }
+.kpis .kpi { padding: .7rem .9rem .75rem 1rem; border-radius: 12px; }
+.kpis .kpi .lbl { font-size: 12px; margin: 0 0 2px; }
+.kpis .kpi .val { font-size: 21px; }
+.kpis .kpi .sub { font-size: 11px; line-height: 1.35; }
+.kpis .kpi.hero-n .val { font-size: 24px; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } .kpis .kpi.hero-n { grid-column: span 1; } }
+@media (max-width: 700px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis .kpi.hero-n { grid-column: span 2; } }
 .kpi { background: var(--surface); border: .5px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; min-width: 0;
   box-shadow: var(--shadow); position: relative; overflow: hidden; transition: box-shadow .25s, transform .25s; }
 .kpi:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
 .kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--kc, var(--accent)); }
 .kpi:nth-child(2) { --kc: var(--marino); } .kpi:nth-child(3) { --kc: var(--ambar); } .kpi:nth-child(4) { --kc: var(--s5); }
-.kpi:nth-child(5) { --kc: var(--s3); } .kpi:nth-child(6) { --kc: var(--rojo); }
+.kpi:nth-child(5) { --kc: var(--s3); } .kpi:nth-child(6) { --kc: var(--rojo); } .kpi:nth-child(7) { --kc: var(--s6); }
 .kpi.hero-n { background: var(--accent-light); border-color: transparent; }
 .kpi.hero-n .val { color: var(--accent-ink); }
 .kpi .lbl { font-size: 13px; color: var(--ink-2); margin: 0 0 4px; }
@@ -232,6 +238,49 @@ table.t tbody tr:nth-child(even) td { background: var(--surface-2); }
 .paso h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
 .paso p { margin: 0; font-size: 13px; color: var(--ink-2); }
 .paso .ic { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; margin-bottom: 8px; }
+/* esquema del proceso con cifras */
+.flujo { display: flex; gap: 26px; overflow-x: auto; padding: 4px 2px 6px; }
+.fpaso { flex: 1 0 140px; background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; position: relative; }
+.fpaso::after { content: ""; position: absolute; right: -19px; top: 50%; width: 11px; height: 11px; border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent); transform: translateY(-50%) rotate(45deg); }
+.fpaso:last-child::after { display: none; }
+.fpaso .n { font-size: 21px; font-weight: 700; color: var(--accent); letter-spacing: -.02em; }
+.fpaso b { display: block; font-size: 13px; font-weight: 600; }
+.fpaso span { font-size: 12px; color: var(--ink-2); }
+.fpaso.final { background: var(--accent); color: #fff; }
+.fpaso.final .n, .fpaso.final span { color: #fff; }
+:root[data-theme="dark"] .fpaso.final, :root[data-theme="dark"] .fpaso.final .n, :root[data-theme="dark"] .fpaso.final span { color: #0f1413; }
+
+/* variación en las cifras principales */
+.kpi .dl { display: inline-block; margin-top: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; }
+.dl.up { background: color-mix(in srgb, var(--up) 14%, transparent); color: var(--up); }
+.dl.dn { background: color-mix(in srgb, var(--down) 12%, transparent); color: var(--down); }
+.dl.eq { background: var(--surface-2); color: var(--ink-2); }
+
+/* tabla de comunidades */
+.tabla-ccaa { max-height: 520px; overflow: auto; }
+table.geo th { cursor: pointer; user-select: none; white-space: nowrap; }
+table.geo td { white-space: nowrap; padding: 5px 8px; }
+table.geo tr.clic { cursor: pointer; }
+table.geo tr.clic:hover td { background: var(--accent-light); }
+table.geo tr.sel td { background: var(--accent-light); font-weight: 600; }
+.mini-bar { display: inline-block; height: 8px; border-radius: 0 3px 3px 0; background: var(--s1); vertical-align: middle; margin-right: 6px; }
+
+/* oferta típica */
+.persona { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; margin-top: 6px; }
+.avatar { width: 84px; height: 84px; border-radius: 22px; background: var(--accent-light); color: var(--accent); display: grid; place-items: center; }
+.rasgos { display: flex; flex-wrap: wrap; gap: 7px; }
+.rasgos span { background: var(--surface-2); border-radius: 99px; padding: 4px 11px; font-size: 13px; color: var(--ink-2); }
+.rasgos b { color: var(--accent-ink); font-weight: 600; }
+@media (max-width: 520px) { .persona { grid-template-columns: 1fr; } }
+
+/* cabecera: botones y aviso de copiado */
+.botones-cab { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.aviso-copia { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); background: var(--ink); color: var(--surface);
+  padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 120; }
+.aviso-copia.ver { opacity: 1; transform: translate(-50%, 0); }
+.btn-csv, .btn-png { font-size: 12px; }
+
 ul.lista { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13.5px; }
 ul.lista li { margin: 4px 0; }
 

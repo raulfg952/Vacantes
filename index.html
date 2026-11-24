@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/panel.css?v=14">
+<link rel="stylesheet" href="assets/panel.css?v=20">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 </head>
@@ -26,10 +26,16 @@
         <h1><span class="logo" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M5 20V11M12 20V4M19 20v-6"/></svg></span>Panel de ofertas de empleo en internet</h1>
         <p class="lead">Ofertas de <span id="hPortales">—</span> portales de empleo españoles, juntadas y sin repetidas · <span id="hEyebrow"></span></p>
       </div>
-      <button class="btn-tema" id="btnTema" type="button" aria-label="Cambiar entre tema claro y oscuro">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-        <span id="txtTema">Tema</span></button>
+      <div class="botones-cab">
+        <button class="btn-tema" id="btnEnlace" type="button" title="Copiar un enlace que abre el panel con este mes y estos filtros">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+          Copiar enlace</button>
+        <button class="btn-tema" id="btnTema" type="button" aria-label="Cambiar entre tema claro y oscuro">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <span id="txtTema">Tema</span></button>
+      </div>
     </div>
+    <div class="aviso-copia" id="aviso-copia" role="status"></div>
     <details class="about">
       <summary>Acerca de este proyecto</summary>
       <div class="about-body">
@@ -91,8 +97,11 @@
       </div>
       <div class="card c4 revela" id="cRankGeo">
         <div class="card-cab"><div><h3 id="tRankGeo">Ranking</h3><p class="desc" id="dRankGeo"></p></div></div>
-        <div class="graf muyalto" id="gRankGeo"></div>
-        <div class="tabla-vista"></div>
+        <div class="tabla-ccaa" id="tCcaa"></div>
+      </div>
+      <div class="card c12 revela" id="cMuni">
+        <div class="card-cab"><div><h3>Municipios con más ofertas</h3><p class="desc" id="dMuni"></p></div></div>
+        <div class="graf alto" id="gMuni"></div><div class="tabla-vista"></div>
       </div>
     </div>
   </section>
@@ -116,6 +125,12 @@
             <button type="button" data-v="pct_con_salario" aria-pressed="false">% con salario</button>
           </div></div></div>
         <div class="graf" id="gEvoInd"></div><div class="tabla-vista"></div>
+        <div class="pie" id="pieEvoInd"></div>
+      </div>
+      <div class="card c12 revela" id="cSem">
+        <div class="card-cab"><div><h3>Ofertas por semana de publicación</h3><p class="desc" id="dSem"></p></div></div>
+        <div class="graf" id="gSem"></div><div class="tabla-vista"></div>
+        <div class="pie">Son las ofertas que seguían publicadas al recogerlas, según su fecha de publicación (la más antigua conocida). Las semanas más antiguas salen bajas porque muchas ofertas de entonces ya se habían retirado.</div>
       </div>
     </div>
   </section>
@@ -132,6 +147,11 @@
       <div class="card c5 revela" id="cExcl">
         <div class="card-cab"><div><h3>Exclusiones R0-R6</h3><p class="desc">Ofertas únicas que no cuentan como vacante en España.</p></div></div>
         <div class="graf" id="gExcl"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c12 revela" id="cSankey">
+        <div class="card-cab"><div><h3>Diagrama de flujo del procesamiento</h3><p class="desc" id="dSankey"></p></div></div>
+        <div class="graf alto" id="gSankey"></div><div class="tabla-vista"></div>
+        <div class="pie">Hasta «Ofertas distintas» se cuentan filas; desde ahí, ofertas (una por grupo de copias).</div>
       </div>
     </div>
   </section>
@@ -209,6 +229,31 @@
             <button type="button" data-v="sal" aria-pressed="false">Salario</button></div></div></div>
         <div class="graf alto" id="gAreas"></div><div class="tabla-vista"></div>
       </div>
+      <div class="card c12 revela" id="cCruce">
+        <div class="card-cab"><div><h3>Cruce de variables</h3><p class="desc" id="dCruce"></p></div>
+          <div class="herr">
+            <div class="filtro"><label for="cruceFila">Filas</label><select id="cruceFila"></select></div>
+            <div class="filtro"><label for="cruceCol">Columnas</label><select id="cruceCol"></select></div>
+            <div class="seg" id="cruceModo" style="align-self:flex-end"><button type="button" data-v="n" aria-pressed="true">Ofertas</button><button type="button" data-v="pct" aria-pressed="false">% de la fila</button></div>
+          </div></div>
+        <div class="graf alto" id="gCruce"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c6 revela" id="cBurb">
+        <div class="card-cab"><div><h3>Áreas: salario frente a trabajo a distancia</h3><p class="desc" id="dBurb"></p></div></div>
+        <div class="graf alto" id="gBurb"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c6 revela" id="cArbol">
+        <div class="card-cab"><div><h3>Áreas por tamaño y estabilidad del contrato</h3><p class="desc" id="dArbol"></p></div></div>
+        <div class="graf alto" id="gArbol"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c7 revela" id="cSankeyMod">
+        <div class="card-cab"><div><h3>Agregadores frente a portales directos: modalidad</h3><p class="desc" id="dSankeyMod"></p></div></div>
+        <div class="graf" id="gSankeyMod"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c5 revela" id="cTipica">
+        <div class="card-cab"><div><h3>La oferta típica</h3><p class="desc" id="dTipica"></p></div></div>
+        <div id="tipica"></div>
+      </div>
     </div>
   </section>
 
@@ -234,6 +279,10 @@
         <div class="card-cab"><div><h3>Salario mediano por estudios</h3></div></div>
         <div class="graf bajo" id="gSalEst"></div><div class="tabla-vista"></div>
       </div>
+      <div class="card c12 revela" id="cRango">
+        <div class="card-cab"><div><h3>Rango salarial por área</h3><p class="desc" id="dRango"></p></div></div>
+        <div class="graf alto" id="gRango"></div><div class="tabla-vista"></div>
+      </div>
     </div>
   </section>
 
@@ -253,6 +302,15 @@
       <div class="card c5 revela" id="cSk">
         <div class="card-cab"><div><h3>Requisitos que los portales dan aparte</h3><p class="desc">Campo «skills»: solo lo traen algunos portales.</p></div></div>
         <div class="graf" id="gSk"></div><div class="tabla-vista"></div>
+      </div>
+      <div class="card c7 revela" id="cMov">
+        <div class="card-cab"><div><h3>Puestos que más suben y bajan</h3><p class="desc" id="dMov"></p></div></div>
+        <div class="graf alto" id="gMov"></div><div class="tabla-vista"></div>
+        <div class="pie">La línea gris es el cambio del total de ofertas: los puestos a su derecha crecen más que el conjunto.</div>
+      </div>
+      <div class="card c12 revela" id="cPos">
+        <div class="card-cab"><div><h3>Ranking de puestos mes a mes</h3><p class="desc" id="dPos"></p></div></div>
+        <div class="graf" id="gPos"></div><div class="tabla-vista"></div>
       </div>
     </div>
   </section>
@@ -302,6 +360,10 @@
             <h4>Exclusiones e histórico</h4><p>Fuera las de más de 60 días y las que no son vacantes en España (reglas R0-R6). Cada oferta lleva un identificador que se mantiene entre meses.</p></div>
         </div>
       </div>
+      <div class="card c12 revela" id="cFlujo">
+        <div class="card-cab"><div><h3>El proceso con las cifras del mes</h3><p class="desc" id="dFlujo"></p></div></div>
+        <div class="flujo" id="flujo"></div>
+      </div>
       <div class="card c6 revela" id="cCrit">
         <div class="card-cab"><div><h3>Por qué se unieron las filas repetidas</h3><p class="desc">Filas que entraron en un grupo, según el criterio que las unió.</p></div></div>
         <div class="graf alto" id="gCrit"></div><div class="tabla-vista"></div>
@@ -316,6 +378,7 @@
 
 <footer><div class="wrap" id="pie"></div></footer>
 <div class="tip" id="tip" role="tooltip"></div>
-<script src="assets/panel.js?v=14"></script>
+<script src="assets/panel.js?v=20"></script>
+<script src="assets/extras.js?v=20"></script>
 </body>
 </html>

@@ -20,6 +20,8 @@ const fmtE = v => v == null ? '—' : NF.format(Math.round(v)) + ' €';
 const pctDe = (a, b) => (num(a) == null || !num(b)) ? null : 100 * a / b;
 const ejeNum = v => Math.abs(v) >= 10000 ? NFC.format(v) : NF.format(v);
 const NOMBRE_TIPO = { directo: 'Con portal directo', agregador: 'Solo agregadores' };
+// Meses procesados con un código muy distinto del actual: se marcan en las series mensuales
+const NO_COMPARABLE = new Set(['07-2026', '08-2026']);
 const AGREGADORES = new Set(['Bebee', 'Talent', 'JobLeads', 'JobToday', 'Tideri', 'LifeWorq', 'Glassdoor']);
 const nombreMes = m => {
   const [mm, aa] = m.split('-');
@@ -140,6 +142,7 @@ function tabla(cardId, cols, filas) {
   const tb = el('tbody');
   filas.forEach(f => { const tr = el('tr'); f.forEach(v => tr.appendChild(el('td', {}, v))); tb.appendChild(tr); });
   t.appendChild(tb); caja.appendChild(t);
+  descargas(cardId, cols, filas);
 }
 
 // ---------------------------------------------------------------------------
@@ -253,18 +256,58 @@ function contar(elm, desde, hasta, f) {
   };
   requestAnimationFrame(paso);
 }
+// Mes anterior comparable (mismo código): solo si ni este ni el anterior están en NO_COMPARABLE
+function mesAnterior() {
+  const i = MESES.findIndex(m => m.mes === S.mes);
+  const p = i > 0 ? MESES[i - 1].mes : null;
+  if (!p || NO_COMPARABLE.has(p) || NO_COMPARABLE.has(S.mes) || !CACHE[p]) return null;
+  return { mes: p, D: CACHE[p] };
+}
+// El mismo corte (mismos filtros) en el mes anterior
+function corteAnterior(ignora) {
+  const a = mesAnterior(); if (!a) return null;
+  const k = claveCorte(ignora).k;
+  return a.D.cortes[k] || null;
+}
+// Valores de las cifras principales de un corte
+function valoresKpi(c, k) {
+  const n = c ? num(c.n) : null;
+  return {
+    n, p: k ? k.num_portales : null, e: c ? num(c.empresas) : null,
+    a: c && c.tipo ? pctDe(c.tipo.agregador, n) : null,
+    s: c && c.sal ? c.sal.med ?? null : null,
+    i: c && c.contrato ? pctDe(c.contrato['Indefinido'], n - (num(c.contrato['Sin dato']) || 0)) : null,
+    w: c && c.sal ? pctDe(c.sal.n, n) : null,
+  };
+}
+// cómo se compara cada cifra: % de cambio (rel) o diferencia en puntos (pp)
+const TIPO_DELTA = { n: 'rel', p: 'abs', e: 'rel', a: 'pp', s: 'rel', i: 'pp', w: 'pp' };
+function pintarDelta(d, id, ahora, antes, mesAnt) {
+  let dl = $('.dl', d); if (!dl) { dl = el('span', { class: 'dl' }); d.appendChild(dl); }
+  if (ahora == null || antes == null || !mesAnt) { dl.style.display = 'none'; return; }
+  const t = TIPO_DELTA[id];
+  const v = t === 'rel' ? 100 * (ahora - antes) / antes : ahora - antes;
+  const txt = t === 'rel' ? `${NF1.format(Math.abs(v))} %` : t === 'pp' ? `${NF1.format(Math.abs(v))} p.p.` : NF.format(Math.abs(v));
+  const igual = Math.abs(v) < (t === 'abs' ? 0.5 : 0.05);
+  dl.style.display = '';
+  dl.className = 'dl ' + (igual ? 'eq' : v > 0 ? 'up' : 'dn');
+  dl.textContent = igual ? `= que en ${mesCorto(mesAnt).slice(0, 3)}` : `${v > 0 ? '▲' : '▼'} ${txt} vs ${mesCorto(mesAnt).slice(0, 3)}`;
+  dl.title = `Frente a ${nombreMes(mesAnt)}, con los mismos filtros`;
+}
 function pintarKpis() {
   const c = corte(); const k = D.kpis;
   const n = c ? num(c.n) : null;
-  const conMod = c && c.modalidad ? Object.entries(c.modalidad).filter(([x]) => x !== 'Sin dato').reduce((a, [, v]) => a + (num(v) || 0), 0) : null;
+  const ant = mesAnterior();
+  const vAnt = ant ? valoresKpi(corteAnterior(), ant.D.kpis) : null;
   const items = [
     { id: 'n', lbl: S.mes === '11-2026' || D.con_exclusiones ? 'Ofertas únicas que cuentan' : 'Ofertas únicas', v: n, f: x => NF.format(Math.round(x)),
       sub: c && c.n === '<10' ? 'menos de 10' : (D.con_exclusiones && n === num(k.ofertas) ? `${NF.format(k.finales_antes_exclusiones)} finales, ${NF.format(k.finales_antes_exclusiones - k.ofertas)} excluidas` : nFiltro()), hero: true },
     { id: 'p', lbl: 'Portales', v: k.num_portales, f: x => NF.format(Math.round(x)), sub: 'con ofertas este mes' },
+    { id: 'e', lbl: 'Empresas', v: c ? num(c.empresas) : null, f: x => NF.format(Math.round(x)), sub: 'distintas que publican (con nombre)' },
     { id: 'a', lbl: 'Solo de agregadores', v: c && c.tipo ? pctDe(c.tipo.agregador, n) : null, f: x => NF1.format(x) + ' %', sub: 'ninguna copia en portal directo' },
     { id: 's', lbl: 'Salario mediano', v: c && c.sal ? c.sal.med ?? null : null, f: x => NF.format(Math.round(x / 100) * 100) + ' €', sub: 'bruto anual, de las que lo dicen' },
-    { id: 't', lbl: 'En teletrabajo', v: c && c.modalidad ? pctDe(c.modalidad['Teletrabajo'], conMod) : null, f: x => NF1.format(x) + ' %', sub: 'de las que dicen la modalidad' },
-    { id: 'v', lbl: 'Ya vistas antes', v: c && c.vistas != null ? pctDe(c.vistas, n) : null, f: x => NF1.format(x) + ' %', sub: 'en meses anteriores' },
+    { id: 'i', lbl: 'Indefinidos', v: c && c.contrato ? pctDe(c.contrato['Indefinido'], n - (num(c.contrato['Sin dato']) || 0)) : null, f: x => NF1.format(x) + ' %', sub: 'de las que dicen el contrato' },
+    { id: 'w', lbl: 'Publican salario', v: c && c.sal ? pctDe(c.sal.n, n) : null, f: x => NF1.format(x) + ' %', sub: 'de todas las ofertas' },
   ];
   const caja = $('#kpis');
   if (!caja.children.length) {
@@ -278,6 +321,7 @@ function pintarKpis() {
     const d = $('#kpi-' + it.id);
     $('.lbl', d).textContent = it.lbl; $('.sub', d).textContent = it.sub;
     const v = $('.val', d);
+    pintarDelta(d, it.id, it.v, vAnt ? vAnt[it.id] : null, ant && ant.mes);
     if (it.id === 'n' && c && c.n === '<10') { v.textContent = '<10'; return; }
     contar(v, KPI_ANT[it.id] ?? 0, it.v, it.f); KPI_ANT[it.id] = it.v ?? 0;
   });
@@ -389,24 +433,87 @@ function pintarMapa() {
   pintarRankingGeo(datos, met, nivel);
 }
 function nFiltroSin(dim) { const s = S[dim]; S[dim] = '*'; const t = nFiltro(); S[dim] = s; return t; }
+// Tabla ordenable de comunidades o provincias, con barras y cambio frente al mes anterior
+UI.ordGeo = UI.ordGeo || 'n';
 function pintarRankingGeo(datos, met, nivel) {
-  const filas = datos.filter(d => met.v(d) != null).sort((a, b) => met.v(b) - met.v(a)).slice(0, nivel === 'ccaa' ? 19 : 20);
-  $('#tRankGeo').textContent = nivel === 'ccaa' ? 'Comunidades' : 'Las 20 primeras provincias';
-  $('#dRankGeo').textContent = met.t;
-  if (!filas.length) { vacio('gRankGeo', 'Sin datos suficientes'); return; }
-  const hay = S.ccaa !== '*' && nivel === 'ccaa';
-  const g = graf('gRankGeo');
-  g.setOption(base({
-    grid: { left: 8, right: 64, top: 4, bottom: 4, containLabel: true },
-    tooltip: Object.assign(base().tooltip, { trigger: 'item', formatter: p => tipFila(C.s[0], met.f(p.value), p.name) }),
-    xAxis: ejeVal({ show: false }), yAxis: ejeCat({ inverse: true, data: filas.map(d => d.nombre), axisLine: { show: false } }),
-    series: [{ type: 'bar', barMaxWidth: 16, data: filas.map(d => ({ value: met.v(d),
-      itemStyle: { color: C.s[0], opacity: hay && d.nombre !== S.ccaa ? 0.35 : 1, ...BARRA([0, 4, 4, 0]) } })),
-    label: { show: true, position: 'right', color: C.ink2, fontSize: 11, formatter: p => met.f(p.value) } }],
-  }), true);
-  g.off('click');
-  g.on('click', p => { if (nivel === 'ccaa') alternar('ccaa', p.name); });
-  tabla('cRankGeo', [nivel === 'ccaa' ? 'Comunidad' : 'Provincia', met.t], filas.map(d => [d.nombre, met.f(met.v(d))]));
+  const ant = mesAnterior();
+  const cAnt = ant ? corteAnterior('ccaa') : null;
+  const tAnt = cAnt ? (nivel === 'ccaa' ? cAnt.ccaa : cAnt.prov) : null;
+  const filas = datos.map(d => {
+    const a = tAnt && tAnt[d.nombre] ? num(tAnt[d.nombre][0]) : null;
+    return Object.assign({}, d, { cambio: a && d.n != null ? 100 * (d.n - a) / a : null });
+  });
+  $('#tRankGeo').textContent = nivel === 'ccaa' ? 'Comunidades' : 'Provincias';
+  $('#dRankGeo').textContent = 'Clic en una cabecera para ordenar' + (nivel === 'ccaa' ? ' · en una fila para filtrar' : '');
+  const cols = [['nombre', nivel === 'ccaa' ? 'Comunidad' : 'Provincia'], ['n', 'Ofertas'],
+    ...(ant ? [['cambio', 'vs ' + mesCorto(ant.mes).slice(0, 3)]] : []), ['tele', '% tele.'], ['sal', 'Salario']];
+  const o = UI.ordGeo;
+  filas.sort((a, b) => o === 'nombre' ? a.nombre.localeCompare(b.nombre, 'es') : (b[o] ?? -1e12) - (a[o] ?? -1e12));
+  const caja = $('#tCcaa'); caja.textContent = '';
+  const t = el('table', { class: 't geo' }), thr = el('tr');
+  cols.forEach(([k, txt]) => {
+    const th = el('th', { scope: 'col', tabindex: '0', 'aria-sort': k === o ? 'descending' : 'none' }, txt + (k === o ? ' ▾' : ''));
+    const ordenar = () => { UI.ordGeo = k; pintarRankingGeo(datos, met, nivel); };
+    th.addEventListener('click', ordenar); th.addEventListener('keydown', e => { if (e.key === 'Enter') ordenar(); });
+    thr.appendChild(th);
+  });
+  t.appendChild(el('thead')).appendChild(thr);
+  const tb = el('tbody'), mx = Math.max(...filas.map(f => f.n || 0), 1);
+  filas.forEach(f => {
+    const tr = el('tr', { class: nivel === 'ccaa' ? 'clic' + (f.nombre === S.ccaa ? ' sel' : '') : '' });
+    tr.appendChild(el('td', {}, f.nombre));
+    const tdn = el('td'); const bar = el('span', { class: 'mini-bar' }); bar.style.width = (48 * (f.n || 0) / mx) + 'px';
+    tdn.append(bar, document.createTextNode(f.nTxt)); tr.appendChild(tdn);
+    if (ant) { const td = el('td', { class: f.cambio == null ? '' : f.cambio >= 0 ? 'delta-up' : 'delta-down' },
+      f.cambio == null ? '—' : `${f.cambio >= 0 ? '▲' : '▼'} ${NF1.format(Math.abs(f.cambio))} %`); tr.appendChild(td); }
+    tr.appendChild(el('td', {}, f.tele == null ? (f.teleTxt === '<10' ? '<10' : '—') : NF1.format(f.tele) + ' %'));
+    tr.appendChild(el('td', {}, f.sal == null ? '—' : NF.format(f.sal) + ' €'));
+    if (nivel === 'ccaa') tr.addEventListener('click', () => alternar('ccaa', f.nombre));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); caja.appendChild(t);
+  descargas('cRankGeo', cols.map(c => c[1]), filas.map(f => [f.nombre, f.nTxt, ...(ant ? [f.cambio == null ? '' : NF1.format(f.cambio)] : []),
+    f.tele == null ? '' : NF1.format(f.tele), f.sal == null ? '' : NF.format(f.sal)]));
+}
+
+// Botones de descarga de cada tarjeta: CSV con lo que enseña la gráfica (solo agregados) y PNG
+function csvDe(cols, filas) {
+  const q = v => { const s = String(v ?? ''); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return '﻿' + [cols, ...filas].map(f => f.map(q).join(';')).join('\r\n');   // ; y BOM: se abre bien en Excel
+}
+function bajar(nombre, url) { const a = el('a', { href: url, download: nombre }); document.body.appendChild(a); a.click(); a.remove(); }
+function descargas(cardId, cols, filas) {
+  const card = document.getElementById(cardId); if (!card) return;
+  card._csv = [cols, filas];
+  let herr = $('.herr', card);
+  if (!herr) { herr = el('div', { class: 'herr' }); $('.card-cab', card).appendChild(herr); }
+  if ($('.btn-csv', herr)) return;
+  const nombre = () => (($('h3', card) || {}).textContent || cardId).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + S.mes;
+  const bc = el('button', { class: 'btn-tabla btn-csv', type: 'button', title: 'Descargar los datos de esta gráfica (CSV)' }, '⇩ CSV');
+  bc.addEventListener('click', () => {
+    const [c, f] = card._csv; const blob = new Blob([csvDe(c, f)], { type: 'text/csv;charset=utf-8' });
+    const u = URL.createObjectURL(blob); bajar(nombre() + '.csv', u); setTimeout(() => URL.revokeObjectURL(u), 1000);
+  });
+  herr.appendChild(bc);
+  const g = $('.graf', card);
+  if (g) {
+    const bp = el('button', { class: 'btn-tabla btn-png', type: 'button', title: 'Descargar la gráfica como imagen' }, '⇩ PNG');
+    bp.addEventListener('click', () => {
+      const ch = CH[g.id]; if (!ch) return;
+      // con el dibujo SVG, ECharts devuelve un SVG: se pasa a PNG en un canvas
+      const fondo = getComputedStyle(card).backgroundColor;
+      const svgUrl = ch.getDataURL({ backgroundColor: fondo });
+      const img = new Image();
+      img.onload = () => {
+        const cv = el('canvas'); cv.width = g.clientWidth * 2; cv.height = g.clientHeight * 2;
+        const ctx = cv.getContext('2d'); ctx.fillStyle = fondo; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0, cv.width, cv.height); bajar(nombre() + '.png', cv.toDataURL('image/png'));
+      };
+      img.src = svgUrl;
+    });
+    herr.appendChild(bp);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -441,14 +548,20 @@ function pintarEvolucion() {
   g2.setOption(base({
     grid: { left: 8, right: 24, top: 28, bottom: 8, containLabel: true },
     tooltip: Object.assign(base().tooltip, { trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: C.axis } },
-      formatter: ps => `<div style="font-weight:600">${nombreMes(EVOL[ps[0].dataIndex].mes)}</div>` + tipFila(C.s[6], f(ps[0].value), nombres[ind]) }),
+      formatter: ps => { const e = EVOL[ps[0].dataIndex];
+        return `<div style="font-weight:600">${nombreMes(e.mes)}</div>` + tipFila(C.s[0], f(ps[0].value), nombres[ind]) +
+          (NO_COMPARABLE.has(e.mes) ? `<div style="max-width:240px;white-space:normal;color:${C.muted};font-size:12px;margin-top:4px">Código antiguo: no comparable con octubre y noviembre.</div>` : ''); } }),
     xAxis: ejeCat({ data: EVOL.map(e => mesCorto(e.mes)), boundaryGap: true }),
-    yAxis: ejeVal({ scale: ind === 'salario_mediano', axisLabel: { color: C.muted, fontSize: 11, formatter: v => ind === 'salario_mediano' ? ejeNum(v) : v + ' %' } }),
-    series: [{ type: 'line', data: EVOL.map(e => e[ind]), connectNulls: false, symbol: 'circle', symbolSize: 10,
-      lineStyle: { width: 2, color: C.s[6] }, itemStyle: { color: C.s[6], borderColor: C.surface, borderWidth: 2 },
-      areaStyle: { color: C.s[6], opacity: 0.08 },
-      label: { show: true, position: 'top', color: C.ink2, fontSize: 11, formatter: p => p.value == null ? '' : f(p.value) } }],
+    // el eje empieza siempre en 0: con un eje recortado, un cambio pequeño parece enorme
+    yAxis: ejeVal({ min: 0, axisLabel: { color: C.muted, fontSize: 11, formatter: v => ind === 'salario_mediano' ? ejeNum(v) : v + ' %' } }),
+    series: [{ type: 'line', connectNulls: false, symbol: 'circle', symbolSize: 10,
+      data: EVOL.map(e => ({ value: e[ind], itemStyle: NO_COMPARABLE.has(e.mes)
+        ? { color: C.surface, borderColor: C.s[0], borderWidth: 2 } : { color: C.s[0], borderColor: C.surface, borderWidth: 2 } })),
+      lineStyle: { width: 2, color: C.s[0] },
+      label: { show: true, position: 'top', distance: 8, color: C.ink2, fontSize: 11, formatter: p => p.value == null ? '' : f(p.value) } }],
   }), true);
+  $('#pieEvoInd').textContent = 'Puntos huecos: julio y agosto, procesados con código antiguo (otra estandarización del salario, ' +
+    'sin exclusiones ni filtro de 60 días). No son comparables con octubre y noviembre.';
   tabla('cEvoInd', ['Mes', nombres[ind]], EVOL.map(e => [nombreMes(e.mes), f(e[ind])]));
 }
 
@@ -804,6 +917,92 @@ function pintarAreas() {
 const AREA_OTROS = 'Otras / sin clasificar';
 
 // ---------------------------------------------------------------------------
+// Municipios, semanas de publicación y cruce libre de dos variables
+// ---------------------------------------------------------------------------
+function pintarMuni() {
+  const c = corte();
+  $('#dMuni').textContent = `${nombreMes(S.mes)} · ${nFiltro()} · los 20 primeros (solo con 10 ofertas o más)`;
+  if (!c || !c.muni || !c.muni.length) {
+    vacio('gMuni', c && !c.muni ? 'Este cruce no tiene municipios: quita el área o la comunidad' : 'Sin municipios con 10 ofertas o más');
+    tabla('cMuni', ['Municipio', 'Provincia', 'Ofertas'], []); return;
+  }
+  // nombres del callejero del INE: "Coruña, A" -> "A Coruña"; "Alacant/Alicante" se deja tal cual
+  const bonito = s => s && s.includes(', ') ? s.split(', ').reverse().join(' ') : s;
+  const filas = c.muni.map(([m, p, n]) => [bonito(m), bonito(p), n]);
+  const g = graf('gMuni');
+  g.setOption(base({
+    grid: { left: 16, right: 64, top: 4, bottom: 4, containLabel: true },
+    tooltip: Object.assign(base().tooltip, { trigger: 'item', formatter: p => { const [m, pr, n] = filas[p.dataIndex];
+      return `<div style="font-weight:600">${esc(m)}</div>` + tipFila(C.s[0], fmt(n), 'ofertas') + (pr ? `<div style="color:${C.muted}">${esc(pr)}</div>` : ''); } }),
+    xAxis: ejeVal({ show: false }), yAxis: ejeCat({ inverse: true, data: filas.map(f => f[0]), axisLine: { show: false } }),
+    series: [{ type: 'bar', barMaxWidth: 16, data: filas.map(f => ({ value: f[2], itemStyle: { color: C.s[0], ...BARRA([0, 4, 4, 0]) } })),
+      label: { show: true, position: 'right', color: C.ink2, fontSize: 11, formatter: p => NF.format(p.value) } }],
+  }), true);
+  tabla('cMuni', ['Municipio', 'Provincia', 'Ofertas'], filas.map(f => [f[0], f[1] || '—', fmt(f[2])]));
+}
+function pintarSemanas() {
+  const c = corte(), W = D.semanas || [];
+  $('#dSem').textContent = `${nombreMes(S.mes)} · ${nFiltro()} · semanas de lunes a domingo, las ${W.length} anteriores a la recogida`;
+  if (!c || !c.semanas || !W.length) { vacio('gSem', 'Sin fechas de publicación para este filtro'); tabla('cSem', ['Semana', 'Ofertas'], []); return; }
+  const etq = W.map(w => { const [a, m, d] = w.split('-'); return `${+d}/${+m}`; });
+  const vals = W.map(w => c.semanas[w] ?? 0);
+  const g = graf('gSem');
+  g.setOption(base({
+    grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
+    tooltip: Object.assign(base().tooltip, { trigger: 'axis', axisPointer: { type: 'shadow', shadowStyle: { color: C.surface2, opacity: .6 } },
+      formatter: ps => `<div style="font-weight:600">Semana del ${etq[ps[0].dataIndex]}</div>` + tipFila(C.s[0], fmt(vals[ps[0].dataIndex]), 'ofertas publicadas') }),
+    xAxis: ejeCat({ data: etq, axisLabel: { color: C.ink2, fontSize: 11, interval: 0 } }), yAxis: ejeVal(),
+    series: [{ type: 'bar', barMaxWidth: 24, data: vals.map(v => ({ value: num(v) || 0, itemStyle: { color: C.s[0], ...BARRA([4, 4, 0, 0]) } })),
+      label: { show: innerWidth > 700, position: 'top', color: C.ink2, fontSize: 11, formatter: p => ejeNum(p.value) } }],
+  }), true);
+  tabla('cSem', ['Semana (lunes)', 'Ofertas'], W.map((w, i) => [w.split('-').reverse().join('-'), fmt(vals[i])]));
+}
+const NOMBRE_VAR = { contrato: 'Contrato', jornada: 'Jornada', modalidad: 'Modalidad', experiencia: 'Experiencia', estudios: 'Estudios' };
+function pintarCruce() {
+  const V = D.cruces_vars;
+  if (!V) { vacio('gCruce', 'Vuelve a generar los datos para ver este cruce'); return; }
+  const vars = Object.keys(V);
+  UI.cruceFila = UI.cruceFila || 'estudios'; UI.cruceCol = UI.cruceCol || 'experiencia';
+  if (UI.cruceFila === UI.cruceCol) UI.cruceCol = vars.find(v => v !== UI.cruceFila);
+  ['#cruceFila', '#cruceCol'].forEach((sel, i) => {
+    const s = $(sel); if (!s.options.length) vars.forEach(v => s.appendChild(el('option', { value: v }, NOMBRE_VAR[v])));
+    s.value = i ? UI.cruceCol : UI.cruceFila;
+  });
+  const c = corte();
+  const a = UI.cruceFila, b = UI.cruceCol;
+  const clave = vars.indexOf(a) < vars.indexOf(b) ? `${a}|${b}` : `${b}|${a}`;
+  $('#dCruce').textContent = `${nombreMes(S.mes)} · ${nFiltro()} · ofertas que dan las dos variables`;
+  if (!c || !c.cruces) { vacio('gCruce', 'Este cruce no está para área y comunidad a la vez: quita uno de los dos filtros'); tabla('cCruce', ['', ''], []); return; }
+  let M = c.cruces[clave];
+  if (clave !== `${a}|${b}`) M = M[0].map((_, j) => M.map(fila => fila[j]));   // trasponer
+  const F = V[a], Cc = V[b], pct = UI.cruceModo === 'pct';
+  const totFila = M.map(f => f.reduce((s, v) => s + (num(v) || 0), 0));
+  const datos = [];
+  M.forEach((f, i) => f.forEach((v, j) => {
+    const n = num(v), val = n == null ? null : (pct ? (totFila[i] ? 100 * n / totFila[i] : null) : n);
+    datos.push({ value: [j, i, val == null ? '-' : +val.toFixed(1), v] });
+  }));
+  const vals = datos.map(d => d.value[2]).filter(v => v !== '-');
+  const maxV = vals.length ? Math.max(...vals) : 1;
+  datos.forEach(d => { d.label = { color: d.value[2] === '-' ? C.ink : tintaSobre(colorSeq(d.value[2] / maxV)) }; });
+  const g = graf('gCruce');
+  g.setOption(base({
+    grid: { left: 8, right: 16, top: 30, bottom: 50, containLabel: true },
+    tooltip: Object.assign(base().tooltip, { trigger: 'item', formatter: p => { const [j, i, , v] = p.data.value;
+      return `<div style="font-weight:600">${esc(F[i])} · ${esc(Cc[j])}</div>` + tipFila(C.s[0], fmt(v), 'ofertas') +
+        tipFila(C.s[0], fmtP(pctDe(v, totFila[i])), `de las de «${F[i]}»`); } }),
+    xAxis: ejeCat({ data: Cc, position: 'top', axisLabel: { color: C.ink2, fontSize: 11, interval: 0, width: 110, overflow: 'break' } }),
+    yAxis: ejeCat({ data: F, inverse: true, axisLabel: { color: C.ink2, fontSize: 11, interval: 0 } }),
+    visualMap: { min: 0, max: maxV, inRange: { color: C.seq }, orient: 'horizontal', left: 'center', bottom: 0, itemWidth: 10, itemHeight: 160,
+      calculable: false, textStyle: { color: C.ink2, fontSize: 11 }, formatter: v => pct ? Math.round(v) + ' %' : ejeNum(Math.round(v)) },
+    series: [{ type: 'heatmap', data: datos, itemStyle: { borderColor: C.surface, borderWidth: 2, borderRadius: 4 },
+      label: { show: true, fontSize: 11, formatter: p => p.data.value[2] === '-' ? (p.data.value[3] === '<10' ? '<10' : '') : (pct ? NF1.format(p.data.value[2]) + ' %' : NF.format(p.data.value[2])) },
+      emphasis: { itemStyle: { borderColor: C.ink, borderWidth: 1 } } }],
+  }), true);
+  tabla('cCruce', [`${NOMBRE_VAR[a]} \\ ${NOMBRE_VAR[b]}`, ...Cc], F.map((f, i) => [f, ...M[i].map(v => pct ? fmtP(pctDe(v, totFila[i])) : fmt(v))]));
+}
+
+// ---------------------------------------------------------------------------
 // 07 Salarios
 // ---------------------------------------------------------------------------
 function pintarSalarios() {
@@ -998,13 +1197,17 @@ function pintarTodo() {
     aviso.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
     aviso.appendChild(el('div', {}, `${nombreMes(S.mes)}. ${D.aviso}`));
   }
-  const tareas = [pintarKpis, pintarMapa, pintarEvolucion, pintarEmbudo, pintarPortales, pintarAgregadores, pintarCondiciones,
-    pintarSalarios, pintarPide, pintarVida, pintarCalidad, pintarMetodo];
+  const tareas = [pintarKpis, pintarMapa, pintarMuni, pintarEvolucion, pintarSemanas, pintarEmbudo, pintarSankey, pintarPortales,
+    pintarAgregadores, pintarCondiciones, pintarCruce, pintarBurbujas, pintarArbol, pintarSankeyMod, pintarTipica, pintarSalarios,
+    pintarRango, pintarPide, pintarMovimientos, pintarPosiciones, pintarVida, pintarCalidad, pintarMetodo, pintarFlujo];
   tareas.forEach(f => { try { f(); } catch (e) { console.error(f.name, e); } });
 }
 function actualizar() { sincronizarFiltros(); pintarTodo(); }
 async function cambiarMes(m) {
   S.mes = m; D = await cargarMes(m);
+  // el mes anterior, para las variaciones (si no carga, se enseña sin variación)
+  const i = MESES.findIndex(x => x.mes === m);
+  if (i > 0) await cargarMes(MESES[i - 1].mes).catch(() => null);
   pintarMeses(); pintarFiltros(); pintarTodo();
 }
 function enlazarControles() {
@@ -1017,6 +1220,16 @@ function enlazarControles() {
   seg('#mapaNivel', 'mapaNivel', pintarMapa); seg('#mapaMetrica', 'mapaMetrica', pintarMapa);
   seg('#evoInd', 'evoInd', pintarEvolucion); seg('#portalesVista', 'portalesVista', pintarPortales);
   seg('#solapModo', 'solapModo', pintarSolape); seg('#areaMetrica', 'areaMetrica', pintarAreas);
+  seg('#cruceModo', 'cruceModo', pintarCruce);
+  $('#cruceFila').addEventListener('change', e => { UI.cruceFila = e.target.value; pintarCruce(); });
+  $('#cruceCol').addEventListener('change', e => { UI.cruceCol = e.target.value; pintarCruce(); });
+  $('#btnEnlace').addEventListener('click', async () => {
+    guardarHash();
+    let ok = true;
+    try { await navigator.clipboard.writeText(location.href); } catch (e) { ok = false; }
+    const t = $('#aviso-copia'); t.textContent = ok ? '✓ Enlace copiado: abre el panel con este mes y estos filtros' : 'Copia la dirección del navegador: ya lleva el mes y los filtros';
+    t.classList.add('ver'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('ver'), 2600);
+  });
   $('#btnTema').addEventListener('click', () => {
     const nuevo = modo() === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = nuevo;
@@ -1056,4 +1269,5 @@ async function iniciar() {
     $('#cargando').classList.add('fuera');
   }
 }
-iniciar();
+// cuando ya se han cargado todos los scripts (también extras.js)
+document.addEventListener('DOMContentLoaded', iniciar);
